@@ -110,7 +110,22 @@ function renderPublicMap() {
     });
   });
 }
-
+// ====== ★これを追加するだけで今までのマップが写真対応になります！ ======
+if (record.photos && record.photos.length > 0) {
+    record.photos.forEach(photo => {
+        // ピンを立てる
+        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer); // または addTo(map)
+        
+        // ピンをクリックしたときに写真を表示するポップアップ
+        marker.bindPopup(`
+            <div style="text-align: center;">
+                <img src="${photo.url}" style="max-width: 250px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <br><span style="font-size: 12px; color: #666;">現場写真</span>
+            </div>
+        `, { maxWidth: 300 });
+    });
+}
+// =================================================================
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbx9HpFMSgmfeNU8A-MQM50LaJqEcubPo0w7G0lX-5iLAxjKYK5CNSeRnLeqACQkcgrzwQ/exec";

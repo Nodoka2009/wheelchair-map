@@ -7,6 +7,9 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
+// ==========================================
+// カテゴリと色の設定（変更なし）
+// ==========================================
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -27,6 +30,7 @@ function getCategoryColor(category) {
   }
 }
 
+// 距離計算（変更なし）
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -35,57 +39,29 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-function nmeaToDecimal(value, direction) {
-  if (!value || value.indexOf(".") < 2) return null;
-  const dotIndex = value.indexOf(".");
-  const degrees = Number(value.slice(0, dotIndex - 2));
-  const minutes = Number(value.slice(dotIndex - 2));
-  if (isNaN(degrees) || isNaN(minutes)) return null;
-  const decimal = degrees + minutes / 60;
-  return (direction === "S" || direction === "W") ? -decimal : decimal;
-}
-
-// ★ 改行がなくても "$" を目印にして1行ずつに自動分解する賢い解析関数
-function parseGgaLines(text) {
-  if (!text) return { points: [] };
-  
-  // 改行コードだけでなく、"$" マークの前で強制的に分割する
-  const normalizedText = text.replace(/\$/g, "\n$");
-  const lines = normalizedText.trim().split(/\r?\n/);
-  
-  const points = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed.includes("GGA")) continue;
-    const fields = trimmed.split(",");
-    const rawLat = fields[2], latDir = fields[3], rawLng = fields[4], lngDir = fields[5], fixQuality = fields[6];
-    if (!rawLat || !rawLng || !latDir || !lngDir || fixQuality === "0") continue;
-    const lat = nmeaToDecimal(rawLat, latDir);
-    const lng = nmeaToDecimal(rawLng, lngDir);
-    if (lat !== null && lng !== null && lat >= 20 && lat <= 46 && lng >= 122 && lng <= 154) {
-      points.push([lat, lng]);
-    }
-  }
-  return { points };
-}
-
+// ==========================================
+// ★ 地図にデータと写真を描画する処理（劇的に軽く・賢くなりました！）
+// ==========================================
 function renderPublicMap() {
   routeLayer.clearLayers();
   
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
 
+  // 取得したデータを1件ずつ処理していくループ
   allRawData.forEach((row) => {
     const cat = getCategory(row.wheelchair, row.assistance);
     const isVisible = visibleCats.includes(cat);
     if (!isVisible) return;
 
-    const parsed = parseGgaLines(row.nmeaText);
-    if (parsed.points.length === 0) return;
+    // ★ 重い解析処理(parseGgaLines)を全削除！GASから送られてきた数字をそのまま使う！
+    const points = row.positions; 
+    if (!points || points.length === 0) return;
 
     const color = getCategoryColor(cat);
 
-    const polyline = L.polyline(parsed.points, {
+    // 軌跡（青い線など）を地図に描く
+    const polyline = L.polyline(points, {
       color: color,
       weight: 5,
       opacity: 0.8,
@@ -93,6 +69,7 @@ function renderPublicMap() {
       lineJoin: "round"
     }).addTo(routeLayer);
 
+    // 軌跡をタップした時の処理
     polyline.on("click", () => {
       document.querySelector("#empty-message").style.display = "none";
       document.querySelector("#info-filename").textContent = row.fileName || "-";
@@ -103,37 +80,44 @@ function renderPublicMap() {
       document.querySelector("#info-memo").textContent = row.memo || "クラウド共有データ";
 
       let totalDist = 0;
-      for (let i = 1; i < parsed.points.length; i++) {
-        totalDist += getDistanceMeters(parsed.points[i-1][0], parsed.points[i-1][1], parsed.points[i][0], parsed.points[i][1]);
+      for (let i = 1; i < points.length; i++) {
+        totalDist += getDistanceMeters(points[i-1][0], points[i-1][1], points[i][0], points[i][1]);
       }
       document.querySelector("#info-distance").textContent = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
     });
-  });
-}
-// ====== ★これを追加するだけで今までのマップが写真対応になります！ ======
-if (record.photos && record.photos.length > 0) {
-    record.photos.forEach(photo => {
-        const marker = L.marker([photo.lat, photo.lng]).addTo(map); // または addTo(routeLayer)
+
+    // ==========================================
+    // ★ 写真のピンを立てる処理（ループの中に正しく配置！）
+    // ==========================================
+    if (row.photos && row.photos.length > 0) {
+      row.photos.forEach(photo => {
+        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
         
-        // ボタンを押した時にすり替えるための、かぶらないIDを作る
         const photoId = "photo_" + Math.random().toString(36).substr(2, 9);
         
-        // 最初は「ボタン」だけを表示し、クリックで「<img>タグ」に書き換える魔法！
+        // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
         marker.bindPopup(`
             <div style="text-align: center;" id="container_${photoId}">
                 <button onclick="document.getElementById('container_${photoId}').innerHTML = '<img src=\\'${photo.url}\\' style=\\'max-width: 250px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);\\'>'" 
-                        style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px;">
                     📷 写真を読み込む
                 </button>
-                <br><span style="font-size: 12px; color: #666; display: inline-block; margin-top: 8px;">タップして画像を取得</span>
+                <br><span style="font-size: 11px; color: #666; display: inline-block; margin-top: 8px;">タップして現場の画像を取得</span>
             </div>
         `, { maxWidth: 300 });
-    });
+      });
+    }
+  });
 }
-// =================================================================
+
+// ==========================================
+// ★ クラウド(GAS)からデータを取ってくる通信処理
+// ==========================================
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
-  const gasUrl = "https://script.google.com/macros/s/AKfycbx9HpFMSgmfeNU8A-MQM50LaJqEcubPo0w7G0lX-5iLAxjKYK5CNSeRnLeqACQkcgrzwQ/exec";
+  
+  // ★★★ 最新のGAS URL（軽量化対応版）★★★
+  const gasUrl = "https://script.google.com/macros/s/AKfycbwGCye5gIWgNJfmkhu2N6D_vjD7awbI0XE4hlYUXAoSAsqSqGYBK41zDhTyjo2-mbhG/exec";
 
   try {
     statusMsg.textContent = "⏳ データを読み込み中...";
@@ -148,12 +132,15 @@ async function loadPublicMapData() {
     allRawData = data;
     statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     
+    // データが揃ったら地図に描く！
     renderPublicMap();
 
+    // 地図のズームを自動調整する処理
     let allBounds = [];
     data.forEach(row => {
-      const p = parseGgaLines(row.nmeaText);
-      p.points.forEach(pt => allBounds.push(pt));
+      if (row.positions && row.positions.length > 0) {
+        row.positions.forEach(pt => allBounds.push(pt));
+      }
     });
     if (allBounds.length > 0) {
       map.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] });
@@ -165,6 +152,7 @@ async function loadPublicMapData() {
   }
 }
 
+// 絞り込みチェックボックスのイベント
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
 
 document.querySelector("#btn-select-all").addEventListener("click", () => {
@@ -176,4 +164,5 @@ document.querySelector("#btn-reset-filter").addEventListener("click", () => {
   renderPublicMap();
 });
 
+// 起動時にデータを読み込む
 loadPublicMapData();

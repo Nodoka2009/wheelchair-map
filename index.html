@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>みんなのバリアフリーマップ</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { max-width: 1200px; margin: 0 auto; padding: 24px; font-family: system-ui, sans-serif; color: #334155; background: #f8fafc; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; }
+        h1 { margin: 0; font-size: 22px; color: #0f172a; }
+        .main-container { display: flex; gap: 24px; }
+        #map { flex: 7; height: 75vh; border-radius: 12px; border: 1px solid #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .sidebar { flex: 3; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .sidebar h2 { font-size: 16px; margin-top: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+        .info-item { margin-bottom: 12px; }
+        .info-label { font-size: 12px; color: #64748b; font-weight: bold; }
+        .info-value { font-size: 15px; color: #0f172a; }
+        .loading { font-size: 14px; color: #3b82f6; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>♿ みんなで作るバリアフリーマップ</h1>
+    <div id="status-msg" class="loading">⏳ クラウドからデータを読み込み中...</div>
+</header>
+
+<div class="main-container">
+    <div id="map"></div>
+    <div class="sidebar">
+        <h2>📍 選択中のルート情報</h2>
+        <div class="info-item"><div class="info-label">投稿ファイル</div><div class="info-value" id="info-filename">-</div></div>
+        <div class="info-item"><div class="info-label">日時</div><div class="info-value" id="info-datetime">-</div></div>
+        <div class="info-item"><div class="info-label">距離</div><div class="info-value" id="info-distance">-</div></div>
+        <div class="info-item"><div class="info-label">天気</div><div class="info-value" id="info-weather">-</div></div>
+        <div class="info-item"><div class="info-label">車いすの種類</div><div class="info-value" id="info-wheelchair">-</div></div>
+        <div class="info-item"><div class="info-label">介助の有無</div><div class="info-value" id="info-assistance">-</div></div>
+        <div class="info-item"><div class="info-label">メモ</div><div class="info-value" id="info-memo">-</div></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="web-map.js"></script>
+</body>
+</html>

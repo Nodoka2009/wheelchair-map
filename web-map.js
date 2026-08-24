@@ -113,14 +113,19 @@ function renderPublicMap() {
 // ====== ★これを追加するだけで今までのマップが写真対応になります！ ======
 if (record.photos && record.photos.length > 0) {
     record.photos.forEach(photo => {
-        // ピンを立てる
-        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer); // または addTo(map)
+        const marker = L.marker([photo.lat, photo.lng]).addTo(map); // または addTo(routeLayer)
         
-        // ピンをクリックしたときに写真を表示するポップアップ
+        // ボタンを押した時にすり替えるための、かぶらないIDを作る
+        const photoId = "photo_" + Math.random().toString(36).substr(2, 9);
+        
+        // 最初は「ボタン」だけを表示し、クリックで「<img>タグ」に書き換える魔法！
         marker.bindPopup(`
-            <div style="text-align: center;">
-                <img src="${photo.url}" style="max-width: 250px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <br><span style="font-size: 12px; color: #666;">現場写真</span>
+            <div style="text-align: center;" id="container_${photoId}">
+                <button onclick="document.getElementById('container_${photoId}').innerHTML = '<img src=\\'${photo.url}\\' style=\\'max-width: 250px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);\\'>'" 
+                        style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    📷 写真を読み込む
+                </button>
+                <br><span style="font-size: 12px; color: #666; display: inline-block; margin-top: 8px;">タップして画像を取得</span>
             </div>
         `, { maxWidth: 300 });
     });

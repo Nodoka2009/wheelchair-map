@@ -5,9 +5,8 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
 }).addTo(map);
 
 const routeLayer = L.layerGroup().addTo(map);
-let allRawData = []; // 取得した全データを保持する箱
+let allRawData = [];
 
-// カテゴリー判定
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -18,7 +17,6 @@ function getCategory(wheelchair, assistance) {
   return "cat_unknown";
 }
 
-// カテゴリーごとの色
 function getCategoryColor(category) {
   switch(category) {
     case "cat_electric": return "#3b82f6"; // 青
@@ -47,9 +45,14 @@ function nmeaToDecimal(value, direction) {
   return (direction === "S" || direction === "W") ? -decimal : decimal;
 }
 
+// ★ 改行がなくても "$" を目印にして1行ずつに自動分解する賢い解析関数
 function parseGgaLines(text) {
   if (!text) return { points: [] };
-  const lines = text.trim().split(/\r?\n/);
+  
+  // 改行コードだけでなく、"$" マークの前で強制的に分割する
+  const normalizedText = text.replace(/\$/g, "\n$");
+  const lines = normalizedText.trim().split(/\r?\n/);
+  
   const points = [];
   for (const line of lines) {
     const trimmed = line.trim();
@@ -66,30 +69,26 @@ function parseGgaLines(text) {
   return { points };
 }
 
-// 画面を描画するメイン関数
 function renderPublicMap() {
   routeLayer.clearLayers();
   
-  const colorAll = document.querySelector("#setting-color-all").checked;
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
 
   allRawData.forEach((row) => {
     const cat = getCategory(row.wheelchair, row.assistance);
     const isVisible = visibleCats.includes(cat);
-    if (!isVisible) return; // チェックが外れていれば非表示
+    if (!isVisible) return;
 
     const parsed = parseGgaLines(row.nmeaText);
     if (parsed.points.length === 0) return;
 
-    const baseColor = getCategoryColor(cat);
-    const routeColor = baseColor;
-    const routeOpacity = colorAll ? 0.8 : 0.4; // 「非選択も色分け」なら少し薄くする等
+    const color = getCategoryColor(cat);
 
     const polyline = L.polyline(parsed.points, {
-      color: routeColor,
+      color: color,
       weight: 5,
-      opacity: routeOpacity,
+      opacity: 0.8,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
@@ -112,7 +111,6 @@ function renderPublicMap() {
   });
 }
 
-// データ取得
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbx9HpFMSgmfeNU8A-MQM50LaJqEcubPo0w7G0lX-5iLAxjKYK5CNSeRnLeqACQkcgrzwQ/exec";
@@ -132,7 +130,6 @@ async function loadPublicMapData() {
     
     renderPublicMap();
 
-    // 初回全体ズーム
     let allBounds = [];
     data.forEach(row => {
       const p = parseGgaLines(row.nmeaText);
@@ -148,8 +145,6 @@ async function loadPublicMapData() {
   }
 }
 
-// イベント設定
-document.querySelector("#setting-color-all").addEventListener("change", renderPublicMap);
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
 
 document.querySelector("#btn-select-all").addEventListener("click", () => {

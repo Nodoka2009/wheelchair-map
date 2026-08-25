@@ -117,7 +117,7 @@ async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   
   // ★★★ 最新のGAS URL（軽量化対応版）★★★
-  const gasUrl = "https://script.google.com/macros/s/AKfycbwGCye5gIWgNJfmkhu2N6D_vjD7awbI0XE4hlYUXAoSAsqSqGYBK41zDhTyjo2-mbhG/exec";
+  const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
 
   try {
     statusMsg.textContent = "⏳ データを読み込み中...";

@@ -35,7 +35,17 @@
 
 <header>
     <h1>♿ みんなで作るバリアフリーマップ</h1>
-    <div id="status-msg">⏳ データを読み込み中...</div>
+    
+    <!-- メッセージと検索バーを横に並べる -->
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div id="status-msg">⏳ データを読み込み中...</div>
+        
+        <!-- ★ ここに検索バーを移動！ -->
+        <div style="display: flex; gap: 4px;">
+            <input type="text" id="search-input" placeholder="地名・駅名で検索..." style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-size: 13px; width: 150px;">
+            <button id="search-btn" style="padding: 6px 10px; cursor: pointer; border: none; background-color: #3b82f6; color: white; border-radius: 6px; font-size: 13px;">🔍</button>
+        </div>
+    </div>
 </header>
 
 <div class="main-container">

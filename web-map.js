@@ -23,74 +23,41 @@ const baseMaps = {
 L.control.layers(baseMaps).addTo(map);
 
 // ==========================================
-// ★ 新機能：地名・駅名の「検索窓」を地図上に追加！
+// ★ 新機能：HTMLに移動した検索バーを動かす処理
 // ==========================================
-const SearchControl = L.Control.extend({
-  options: { position: 'topleft' }, // 左上に配置
-  onAdd: function (map) {
-    // 検索窓の枠組みを作る
-    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-    container.style.backgroundColor = 'white';
-    container.style.padding = '6px';
-    container.style.display = 'flex';
-    container.style.gap = '6px';
-    container.style.borderRadius = '8px';
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
 
-    // 入力フォーム
-    const input = L.DomUtil.create('input', '', container);
-    input.type = 'text';
-    input.placeholder = '地名・駅名で検索...';
-    input.style.padding = '4px 8px';
-    input.style.border = '1px solid #cbd5e1';
-    input.style.borderRadius = '4px';
-    input.style.outline = 'none';
-
-    // 検索ボタン
-    const button = L.DomUtil.create('button', '', container);
-    button.innerHTML = '🔍';
-    button.style.padding = '4px 8px';
-    button.style.cursor = 'pointer';
-    button.style.border = 'none';
-    button.style.backgroundColor = '#3b82f6'; // 青色
-    button.style.color = 'white';
-    button.style.borderRadius = '4px';
-
-    // 無料の地名検索API（Nominatim）を叩く処理
-    const doSearch = async () => {
-      const query = input.value.trim();
-      if (!query) return;
+if (searchInput && searchBtn) {
+  const doSearch = async () => {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    
+    searchBtn.innerHTML = '⏳'; // 検索中は砂時計に
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const data = await res.json();
       
-      button.innerHTML = '⏳'; // 検索中は砂時計に
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (data && data.length > 0) {
-          // 見つかったらその場所にフワッと飛ぶ！
-          map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
-        } else {
-          alert(`「${query}」が見つかりませんでした。別のキーワードを試してください。`);
-        }
-      } catch (err) {
-        alert("検索エラーが発生しました。");
-      } finally {
-        button.innerHTML = '🔍'; // ボタンを元に戻す
+      if (data && data.length > 0) {
+        // 見つかったらその場所にフワッと飛ぶ！
+        map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+      } else {
+        alert(`「${query}」が見つかりませんでした。別のキーワードを試してください。`);
       }
-    };
+    } catch (err) {
+      alert("検索エラーが発生しました。");
+    } finally {
+      searchBtn.innerHTML = '🔍'; // ボタンを元に戻す
+    }
+  };
 
-    // クリックまたはEnterキーで検索実行
-    button.addEventListener('click', doSearch);
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') doSearch();
-    });
-
-    // 検索窓をクリックしたときに裏側の地図が反応しないようにする
-    L.DomEvent.disableClickPropagation(container);
-    return container;
-  }
-});
-map.addControl(new SearchControl());
+  // クリックまたはEnterキーで検索実行
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
 
 // ==========================================
 // これ以降は今までのコードと同じです

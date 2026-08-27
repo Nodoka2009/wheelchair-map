@@ -102,7 +102,7 @@ function renderPublicMap() {
         const photoId = "photo_" + Math.random().toString(36).substr(2, 9);
         
         // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
-        marker.bindPopup(`
+       marker.bindPopup(`
   <div style="text-align: center;">
     <img
       src="${safeUrl}"
@@ -122,8 +122,10 @@ function renderPublicMap() {
 `, {
   maxWidth: 300
 });
-    }
-  });
+
+      });  // ← ★これを追加！
+    }      // if (row.photos...)
+  });      // allRawData.forEach
 }
 
 // ==========================================

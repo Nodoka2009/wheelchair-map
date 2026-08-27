@@ -1,15 +1,38 @@
 const map = L.map("map").setView([34.6937, 135.5022], 13);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+
+// ==========================================
+// ★ 背景地図の設定（標準マップと航空写真の切り替え）
+// ==========================================
+// 1. 標準の地図（今までと同じ）
+const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-}).addTo(map);
+});
 
+// 2. 航空写真（高画質なEsriの衛星写真）
+const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 20,
+  maxNativeZoom: 19, // 限界までズームしても画像が消えずに拡大表示されるようにする魔法
+  attribution: 'Tiles &copy; Esri'
+});
+
+// 初期状態では標準の地図を表示しておく
+stdMap.addTo(map);
+
+// 右上に「レイヤー切り替えコントロール」を追加！
+const baseMaps = {
+  "🗺️ 標準マップ": stdMap,
+  "🛰️ 航空写真": satelliteMap
+};
+L.control.layers(baseMaps).addTo(map);
+
+// ==========================================
+// これ以降は今までのコードと同じです
+// ==========================================
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
-// ==========================================
 // カテゴリと色の設定
-// ==========================================
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -39,13 +62,10 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// ==========================================
-// ★ 新機能：軌跡をアイロンがけする関数（スムージング）
-// ==========================================
+// 新機能：軌跡をアイロンがけする関数（スムージング）
 function smoothLine(points) {
   if (!points || points.length < 3) return points;
   let smoothed = [];
-  // 前後2つの点の平均を取って、飛び出し（建物へのめり込み）をマイルドにする
   for (let i = 0; i < points.length; i++) {
     let start = Math.max(0, i - 2);
     let end = Math.min(points.length - 1, i + 2);
@@ -60,16 +80,13 @@ function smoothLine(points) {
   return smoothed;
 }
 
-// ==========================================
 // 地図にデータと写真を描画する処理
-// ==========================================
 function renderPublicMap() {
   routeLayer.clearLayers();
   
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
 
-  // 取得したデータを1件ずつ処理していくループ
   allRawData.forEach((row) => {
     const cat = getCategory(row.wheelchair, row.assistance);
     const isVisible = visibleCats.includes(cat);
@@ -78,12 +95,9 @@ function renderPublicMap() {
     const points = row.positions; 
     if (!points || points.length === 0) return;
 
-    // ★ ここで先ほどのスムージング関数を使って、線を綺麗にする！
     const beautifulPoints = smoothLine(points);
-
     const color = getCategoryColor(cat);
 
-    // 軌跡（青い線など）を地図に描く（※綺麗な方の点を使う）
     const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 5,
@@ -92,7 +106,6 @@ function renderPublicMap() {
       lineJoin: "round"
     }).addTo(routeLayer);
 
-    // 軌跡をタップした時の処理
     polyline.on("click", () => {
       document.querySelector("#empty-message").style.display = "none";
       document.querySelector("#info-filename").textContent = row.fileName || "-";
@@ -109,13 +122,8 @@ function renderPublicMap() {
       document.querySelector("#info-distance").textContent = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
     });
 
-    // ==========================================
-    // ★ 写真のピンを立てる処理
-    // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
-        
-        // 古い「uc?」URLを強制的に「lh3」の最強URLに自動変換する
         const safeUrl = photo.url.replace(
           "https://drive.google.com/uc?export=view&id=",
           "https://lh3.googleusercontent.com/d/"
@@ -123,40 +131,27 @@ function renderPublicMap() {
 
         const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
         
-        // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
         marker.bindPopup(`
           <div style="text-align: center;">
             <img
               src="${safeUrl}"
-              style="
-                max-width: 250px;
-                max-height: 300px;
-                border-radius: 8px;
-                display: block;
-                margin: 0 auto;
-              "
+              style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto;"
               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
             >
             <div style="display:none; color:#666; padding:10px;">
               📷 写真を読み込めませんでした
             </div>
           </div>
-        `, {
-          maxWidth: 300
-        });
-
+        `, { maxWidth: 300 });
       });
     }
   });
 }
 
-// ==========================================
-// ★ クラウド(GAS)からデータを取ってくる通信処理
-// ==========================================
+// クラウド(GAS)からデータを取ってくる通信処理
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   
-  // ★★★ 最新のGAS URL（軽量化対応版）★★★
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
 
   try {
@@ -172,10 +167,8 @@ async function loadPublicMapData() {
     allRawData = data;
     statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     
-    // データが揃ったら地図に描く！
     renderPublicMap();
 
-    // 地図のズームを自動調整する処理
     let allBounds = [];
     data.forEach(row => {
       if (row.positions && row.positions.length > 0) {

@@ -93,7 +93,10 @@ function renderPublicMap() {
       row.photos.forEach(photo => {
         
         // ★ここを追加！古い「uc?」URLを強制的に「lh3」の最強URLに自動変換する！
-        const safeUrl = photo.url.replace("drive.google.com/uc?export=view&id=", "lh3.googleusercontent.com/d/");
+       const safeUrl = photo.url.replace(
+  "https://drive.google.com/uc?export=view&id=",
+  "https://lh3.googleusercontent.com/d/"
+);
 
         const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
         const photoId = "photo_" + Math.random().toString(36).substr(2, 9);

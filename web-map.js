@@ -103,16 +103,25 @@ function renderPublicMap() {
         
         // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
         marker.bindPopup(`
-            <div style="text-align: center;" id="container_${photoId}">
-                <!-- ★ photo.url を safeUrl に変更！ -->
-                <button onclick="document.getElementById('container_${photoId}').innerHTML = '<img src=\\'${safeUrl}\\' style=\\'max-width: 250px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);\\'>'" 
-                        style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px;">
-                    📷 写真を読み込む
-                </button>
-                <br><span style="font-size: 11px; color: #666; display: inline-block; margin-top: 8px;">タップして現場の画像を取得</span>
-            </div>
-        `, { maxWidth: 300 });
-      });
+  <div style="text-align: center;">
+    <img
+      src="${safeUrl}"
+      style="
+        max-width: 250px;
+        max-height: 300px;
+        border-radius: 8px;
+        display: block;
+        margin: 0 auto;
+      "
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <div style="display:none; color:#666; padding:10px;">
+      📷 写真を読み込めませんでした
+    </div>
+  </div>
+`, {
+  maxWidth: 300
+});
     }
   });
 }

@@ -8,7 +8,7 @@ const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
 // ==========================================
-// カテゴリと色の設定（変更なし）
+// カテゴリと色の設定
 // ==========================================
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
@@ -30,7 +30,7 @@ function getCategoryColor(category) {
   }
 }
 
-// 距離計算（変更なし）
+// 距離計算
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -40,7 +40,28 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 // ==========================================
-// ★ 地図にデータと写真を描画する処理（劇的に軽く・賢くなりました！）
+// ★ 新機能：軌跡をアイロンがけする関数（スムージング）
+// ==========================================
+function smoothLine(points) {
+  if (!points || points.length < 3) return points;
+  let smoothed = [];
+  // 前後2つの点の平均を取って、飛び出し（建物へのめり込み）をマイルドにする
+  for (let i = 0; i < points.length; i++) {
+    let start = Math.max(0, i - 2);
+    let end = Math.min(points.length - 1, i + 2);
+    let sumLat = 0, sumLng = 0;
+    let count = end - start + 1;
+    for (let j = start; j <= end; j++) {
+      sumLat += points[j][0];
+      sumLng += points[j][1];
+    }
+    smoothed.push([sumLat / count, sumLng / count]);
+  }
+  return smoothed;
+}
+
+// ==========================================
+// 地図にデータと写真を描画する処理
 // ==========================================
 function renderPublicMap() {
   routeLayer.clearLayers();
@@ -54,14 +75,16 @@ function renderPublicMap() {
     const isVisible = visibleCats.includes(cat);
     if (!isVisible) return;
 
-    // ★ 重い解析処理(parseGgaLines)を全削除！GASから送られてきた数字をそのまま使う！
     const points = row.positions; 
     if (!points || points.length === 0) return;
 
+    // ★ ここで先ほどのスムージング関数を使って、線を綺麗にする！
+    const beautifulPoints = smoothLine(points);
+
     const color = getCategoryColor(cat);
 
-    // 軌跡（青い線など）を地図に描く
-    const polyline = L.polyline(points, {
+    // 軌跡（青い線など）を地図に描く（※綺麗な方の点を使う）
+    const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 5,
       opacity: 0.8,
@@ -80,52 +103,51 @@ function renderPublicMap() {
       document.querySelector("#info-memo").textContent = row.memo || "クラウド共有データ";
 
       let totalDist = 0;
-      for (let i = 1; i < points.length; i++) {
-        totalDist += getDistanceMeters(points[i-1][0], points[i-1][1], points[i][0], points[i][1]);
+      for (let i = 1; i < beautifulPoints.length; i++) {
+        totalDist += getDistanceMeters(beautifulPoints[i-1][0], beautifulPoints[i-1][1], beautifulPoints[i][0], beautifulPoints[i][1]);
       }
       document.querySelector("#info-distance").textContent = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
     });
 
- // ==========================================
+    // ==========================================
     // ★ 写真のピンを立てる処理
     // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
         
-        // ★ここを追加！古い「uc?」URLを強制的に「lh3」の最強URLに自動変換する！
-       const safeUrl = photo.url.replace(
-  "https://drive.google.com/uc?export=view&id=",
-  "https://lh3.googleusercontent.com/d/"
-);
+        // 古い「uc?」URLを強制的に「lh3」の最強URLに自動変換する
+        const safeUrl = photo.url.replace(
+          "https://drive.google.com/uc?export=view&id=",
+          "https://lh3.googleusercontent.com/d/"
+        );
 
         const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
-        const photoId = "photo_" + Math.random().toString(36).substr(2, 9);
         
         // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
-       marker.bindPopup(`
-  <div style="text-align: center;">
-    <img
-      src="${safeUrl}"
-      style="
-        max-width: 250px;
-        max-height: 300px;
-        border-radius: 8px;
-        display: block;
-        margin: 0 auto;
-      "
-      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-    >
-    <div style="display:none; color:#666; padding:10px;">
-      📷 写真を読み込めませんでした
-    </div>
-  </div>
-`, {
-  maxWidth: 300
-});
+        marker.bindPopup(`
+          <div style="text-align: center;">
+            <img
+              src="${safeUrl}"
+              style="
+                max-width: 250px;
+                max-height: 300px;
+                border-radius: 8px;
+                display: block;
+                margin: 0 auto;
+              "
+              onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+            >
+            <div style="display:none; color:#666; padding:10px;">
+              📷 写真を読み込めませんでした
+            </div>
+          </div>
+        `, {
+          maxWidth: 300
+        });
 
-      });  // ← ★これを追加！
-    }      // if (row.photos...)
-  });      // allRawData.forEach
+      });
+    }
+  });
 }
 
 // ==========================================

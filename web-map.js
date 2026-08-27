@@ -1,30 +1,96 @@
 const map = L.map("map").setView([34.6937, 135.5022], 13);
 
 // ==========================================
-// ★ 背景地図の設定（標準マップと航空写真の切り替え）
+// 背景地図の設定（標準マップと航空写真の切り替え）
 // ==========================================
-// 1. 標準の地図（今までと同じ）
 const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
 });
 
-// 2. 航空写真（高画質なEsriの衛星写真）
 const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
   maxZoom: 20,
-  maxNativeZoom: 19, // 限界までズームしても画像が消えずに拡大表示されるようにする魔法
+  maxNativeZoom: 19,
   attribution: 'Tiles &copy; Esri'
 });
 
-// 初期状態では標準の地図を表示しておく
 stdMap.addTo(map);
 
-// 右上に「レイヤー切り替えコントロール」を追加！
 const baseMaps = {
   "🗺️ 標準マップ": stdMap,
   "🛰️ 航空写真": satelliteMap
 };
 L.control.layers(baseMaps).addTo(map);
+
+// ==========================================
+// ★ 新機能：地名・駅名の「検索窓」を地図上に追加！
+// ==========================================
+const SearchControl = L.Control.extend({
+  options: { position: 'topleft' }, // 左上に配置
+  onAdd: function (map) {
+    // 検索窓の枠組みを作る
+    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    container.style.backgroundColor = 'white';
+    container.style.padding = '6px';
+    container.style.display = 'flex';
+    container.style.gap = '6px';
+    container.style.borderRadius = '8px';
+
+    // 入力フォーム
+    const input = L.DomUtil.create('input', '', container);
+    input.type = 'text';
+    input.placeholder = '地名・駅名で検索...';
+    input.style.padding = '4px 8px';
+    input.style.border = '1px solid #cbd5e1';
+    input.style.borderRadius = '4px';
+    input.style.outline = 'none';
+
+    // 検索ボタン
+    const button = L.DomUtil.create('button', '', container);
+    button.innerHTML = '🔍';
+    button.style.padding = '4px 8px';
+    button.style.cursor = 'pointer';
+    button.style.border = 'none';
+    button.style.backgroundColor = '#3b82f6'; // 青色
+    button.style.color = 'white';
+    button.style.borderRadius = '4px';
+
+    // 無料の地名検索API（Nominatim）を叩く処理
+    const doSearch = async () => {
+      const query = input.value.trim();
+      if (!query) return;
+      
+      button.innerHTML = '⏳'; // 検索中は砂時計に
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data && data.length > 0) {
+          // 見つかったらその場所にフワッと飛ぶ！
+          map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+        } else {
+          alert(`「${query}」が見つかりませんでした。別のキーワードを試してください。`);
+        }
+      } catch (err) {
+        alert("検索エラーが発生しました。");
+      } finally {
+        button.innerHTML = '🔍'; // ボタンを元に戻す
+      }
+    };
+
+    // クリックまたはEnterキーで検索実行
+    button.addEventListener('click', doSearch);
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // 検索窓をクリックしたときに裏側の地図が反応しないようにする
+    L.DomEvent.disableClickPropagation(container);
+    return container;
+  }
+});
+map.addControl(new SearchControl());
 
 // ==========================================
 // これ以降は今までのコードと同じです
@@ -45,11 +111,11 @@ function getCategory(wheelchair, assistance) {
 
 function getCategoryColor(category) {
   switch(category) {
-    case "cat_electric": return "#3b82f6"; // 青
-    case "cat_manual_no_assist": return "#22c55e"; // 緑
-    case "cat_manual_assist": return "#eab308"; // 黄
-    case "cat_caregiver": return "#a855f7"; // 紫
-    default: return "#94a3b8"; // グレー
+    case "cat_electric": return "#3b82f6";
+    case "cat_manual_no_assist": return "#22c55e";
+    case "cat_manual_assist": return "#eab308";
+    case "cat_caregiver": return "#a855f7";
+    default: return "#94a3b8";
   }
 }
 
@@ -62,7 +128,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// 新機能：軌跡をアイロンがけする関数（スムージング）
+// 軌跡をアイロンがけする関数（スムージング）
 function smoothLine(points) {
   if (!points || points.length < 3) return points;
   let smoothed = [];

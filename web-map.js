@@ -86,19 +86,23 @@ function renderPublicMap() {
       document.querySelector("#info-distance").textContent = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
     });
 
-    // ==========================================
-    // ★ 写真のピンを立てる処理（ループの中に正しく配置！）
+ // ==========================================
+    // ★ 写真のピンを立てる処理
     // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
-        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
         
+        // ★ここを追加！古い「uc?」URLを強制的に「lh3」の最強URLに自動変換する！
+        const safeUrl = photo.url.replace("drive.google.com/uc?export=view&id=", "lh3.googleusercontent.com/d/");
+
+        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
         const photoId = "photo_" + Math.random().toString(36).substr(2, 9);
         
         // ギガ節約！最初はボタンを表示し、押された時だけ画像を読み込む
         marker.bindPopup(`
             <div style="text-align: center;" id="container_${photoId}">
-                <button onclick="document.getElementById('container_${photoId}').innerHTML = '<img src=\\'${photo.url}\\' style=\\'max-width: 250px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);\\'>'" 
+                <!-- ★ photo.url を safeUrl に変更！ -->
+                <button onclick="document.getElementById('container_${photoId}').innerHTML = '<img src=\\'${safeUrl}\\' style=\\'max-width: 250px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);\\'>'" 
                         style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 4px;">
                     📷 写真を読み込む
                 </button>

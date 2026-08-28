@@ -2,13 +2,13 @@ const map = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13
 
 const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  attribution: '© OpenStreetMap contributors © CARTO',
 });
 
 const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
   maxZoom: 20,
   maxNativeZoom: 19,
-  attribution: 'Tiles &copy; Esri'
+  attribution: 'Tiles © Esri'
 });
 
 stdMap.addTo(map);
@@ -18,7 +18,6 @@ const baseMaps = {
   "🛰️ 航空写真": satelliteMap
 };
 
-// ズームボタンとレイヤーボタンを右下に移動
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
@@ -39,7 +38,7 @@ if (searchInput && searchBtn) {
       if (data && data.length > 0) {
         map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
       } else {
-        alert(`「${query}」が見つかりませんでした。別のキーワードを試してください。`);
+        alert(`「${query}」が見つかりませんでした。`);
       }
     } catch (err) {
       alert("検索エラーが発生しました。");
@@ -77,6 +76,13 @@ function getCategoryColor(category) {
   }
 }
 
+// ★ 振動の強さに応じた色を返す関数
+function getVibrationColor(vibValue) {
+  if (vibValue >= 5.0) return "#ef4444"; // 赤：大きな段差・激しい揺れ
+  if (vibValue >= 2.0) return "#f59e0b"; // 黄：少しガタガタ
+  return "#22c55e";                      // 緑：滑らかで快適
+}
+
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -108,6 +114,10 @@ function renderPublicMap() {
   let highlightedLayer = null;
   let outlineLayer = null;
 
+  // 選択中の色分けモードを取得 ("wheelchair" または "vibration")
+  const colorModeSelect = document.getElementById("color-mode-select");
+  const colorMode = colorModeSelect ? colorModeSelect.value : "wheelchair";
+
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
 
@@ -120,12 +130,22 @@ function renderPublicMap() {
     if (!points || points.length === 0) return;
 
     const beautifulPoints = smoothLine(points);
-    const color = getCategoryColor(cat);
+
+    // ★ 色の決定（モードによって分岐）
+    let color = "#94a3b8";
+    if (colorMode === "wheelchair") {
+      color = getCategoryColor(cat);
+    } else {
+      // 振動モードの場合、そのルートの平均（または最大）振動数から色を決める
+      const vibs = row.vibrations || [0];
+      const avgVib = vibs.reduce((a, b) => a + b, 0) / vibs.length;
+      color = getVibrationColor(avgVib);
+    }
 
     const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 6,
-      opacity: 0.3,
+      opacity: 0.4,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
@@ -134,13 +154,12 @@ function renderPublicMap() {
       document.getElementById("info-panel").style.display = "flex";
 
       if (highlightedLayer) {
-        highlightedLayer.setStyle({ opacity: 0.3, weight: 6 });
+        highlightedLayer.setStyle({ opacity: 0.4, weight: 6 });
       }
       if (outlineLayer) {
         routeLayer.removeLayer(outlineLayer);
       }
 
-      // クリックした線を不透明にし、裏に太い白線を引いて縁取りを作る
       highlightedLayer = polyline;
       polyline.setStyle({ opacity: 1.0, weight: 6 });
 
@@ -186,6 +205,11 @@ function renderPublicMap() {
       let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
       
       hitTracks.forEach((hitRow, index) => {
+        // 平均振動スコアを計算してパネルに表示
+        const vibs = hitRow.vibrations || [0];
+        const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+        const maxVib = Math.max(...vibs).toFixed(1);
+
         html += `
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
             <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
@@ -194,6 +218,7 @@ function renderPublicMap() {
             </div>
             <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
               <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
+              <div><strong>📈 平均揺れ：</strong> ${avgVib} （最大: ${maxVib}）</div>
               <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
               <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
               <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
@@ -222,6 +247,7 @@ function renderPublicMap() {
   });
 }
 
+// データの読み込み処理（テキスト内の VIB データを抽出するように進化！）
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
@@ -236,13 +262,37 @@ async function loadPublicMapData() {
       return;
     }
 
-    allRawData = data;
+    // 各行のテキストデータから positions と vibrations をパースする
+    allRawData = data.map(row => {
+      let positions = row.positions || [];
+      let vibrations = [];
+
+      // もし row.rawText (またはテキスト本体) があればそこから VIB を抽出
+      if (row.rawText) {
+        const lines = row.rawText.split("\n");
+        lines.forEach(line => {
+          if (line.includes("VIB:")) {
+            const parts = line.split("VIB:");
+            const vibVal = parseFloat(parts[1]) || 0;
+            vibrations.push(vibVal);
+          }
+        });
+      }
+      if (vibrations.length === 0) vibrations = [0];
+
+      return {
+        ...row,
+        positions: positions,
+        vibrations: vibrations
+      };
+    });
+
     statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     
     renderPublicMap();
 
     let allBounds = [];
-    data.forEach(row => {
+    allRawData.forEach(row => {
       if (row.positions && row.positions.length > 0) {
         row.positions.forEach(pt => allBounds.push(pt));
       }
@@ -257,5 +307,13 @@ async function loadPublicMapData() {
   }
 }
 
+// イベントリスナーの登録
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
+
+// ★ 色分けセレクトボックスが変更された時にもマップを再描画する
+const colorModeSelect = document.getElementById("color-mode-select");
+if (colorModeSelect) {
+  colorModeSelect.addEventListener("change", renderPublicMap);
+}
+
 loadPublicMapData();

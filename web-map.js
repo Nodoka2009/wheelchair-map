@@ -90,6 +90,7 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+// ★ 未測位GPS座標を完全に無視する安全な解析関数
 function parseNmeaWithVib(rawText) {
   const points = [];
   const vibs = [];
@@ -99,23 +100,28 @@ function parseNmeaWithVib(rawText) {
   const lines = rawText.split(/\r?\n/);
 
   lines.forEach(line => {
+    // GPGGAだけ使用
     if (!line.includes("$GPGGA,")) return;
     if (!line.includes("VIB:")) return;
 
     const parts = line.split(",");
 
-    if (parts.length < 6 || !parts[2] || !parts[3] || !parts[4] || !parts[5]) {
-      return;
-    }
+    if (parts.length < 7) return;
+
+    // GGAの測位状態 (0 = 測位なし, 1以上 = 測位あり)
+    const fixQuality = parseInt(parts[6], 10);
+
+    // 測位できていない点は完全に無視
+    if (isNaN(fixQuality) || fixQuality === 0) return;
+
+    if (!parts[2] || !parts[3] || !parts[4] || !parts[5]) return;
 
     const latDeg = parseFloat(parts[2].substring(0, 2));
     const latMin = parseFloat(parts[2].substring(2));
     const lngDeg = parseFloat(parts[4].substring(0, 3));
     const lngMin = parseFloat(parts[4].substring(3));
 
-    if (isNaN(latDeg) || isNaN(latMin) || isNaN(lngDeg) || isNaN(lngMin)) {
-      return;
-    }
+    if (isNaN(latDeg) || isNaN(latMin) || isNaN(lngDeg) || isNaN(lngMin)) return;
 
     let lat = latDeg + latMin / 60;
     let lng = lngDeg + lngMin / 60;

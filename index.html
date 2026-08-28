@@ -67,9 +67,12 @@
             </div>
         </div>
 
-        <h2>📍 ルート情報</h2>
-        <div class="empty-message" id="empty-message">
-            地図上のルートをクリックすると<br>詳細情報が表示されます。
+       <h2>📍 ルート情報</h2>
+        <!-- ★ ここから下を書き換え！スクロール可能な箱を用意します -->
+        <div id="route-info-container" style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
+            <div class="empty-message" id="empty-message">
+                地図上のルートをクリックすると<br>重なっているすべての詳細情報が<br>新しい順に表示されます。
+            </div>
         </div>
         <div class="info-item"><div class="info-label">投稿ファイル</div><div class="info-value" id="info-filename">-</div></div>
         <div class="info-item"><div class="info-label">日時</div><div class="info-value" id="info-datetime">-</div></div>

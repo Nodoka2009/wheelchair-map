@@ -1,4 +1,4 @@
-const map = L.map("map").setView([34.6937, 135.5022], 13);
+const map = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
 
 const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
@@ -17,7 +17,10 @@ const baseMaps = {
   "🗺️ 標準マップ": stdMap,
   "🛰️ 航空写真": satelliteMap
 };
-L.control.layers(baseMaps).addTo(map);
+
+// ズームボタンとレイヤーボタンを右下に移動
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
@@ -137,6 +140,7 @@ function renderPublicMap() {
         routeLayer.removeLayer(outlineLayer);
       }
 
+      // クリックした線を不透明にし、裏に太い白線を引いて縁取りを作る
       highlightedLayer = polyline;
       polyline.setStyle({ opacity: 1.0, weight: 6 });
 

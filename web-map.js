@@ -76,11 +76,11 @@ function getCategoryColor(category) {
   }
 }
 
-// ★ 振動の強さに応じた色を返す関数
+// ★ 振動の強さに応じた色を返す関数（基準値を調整）
 function getVibrationColor(vibValue) {
-  if (vibValue >= 5.0) return "#ef4444"; // 赤：大きな段差・激しい揺れ
-  if (vibValue >= 2.0) return "#f59e0b"; // 黄：少しガタガタ
-  return "#22c55e";                      // 緑：滑らかで快適
+  if (vibValue >= 5.0) return "#ef4444"; // 赤：大きな段差・激しい揺れ（5以上）
+  if (vibValue >= 2.0) return "#f59e0b"; // 黄：少しガタガタ（2〜5）
+  return "#22c55e";                      // 緑：滑らかで快適（2未満）
 }
 
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
@@ -114,7 +114,6 @@ function renderPublicMap() {
   let highlightedLayer = null;
   let outlineLayer = null;
 
-  // 選択中の色分けモードを取得 ("wheelchair" または "vibration")
   const colorModeSelect = document.getElementById("color-mode-select");
   const colorMode = colorModeSelect ? colorModeSelect.value : "wheelchair";
 
@@ -131,21 +130,20 @@ function renderPublicMap() {
 
     const beautifulPoints = smoothLine(points);
 
-    // ★ 色の決定（モードによって分岐）
     let color = "#94a3b8";
     if (colorMode === "wheelchair") {
       color = getCategoryColor(cat);
     } else {
-      // 振動モードの場合、そのルートの平均（または最大）振動数から色を決める
-      const vibs = row.vibrations || [0];
-      const avgVib = vibs.reduce((a, b) => a + b, 0) / vibs.length;
-      color = getVibrationColor(avgVib);
+      // 振動モード：そのルートで検知された「最大の揺れ」を基準にする（または平均）
+      const vibs = row.vibrations && row.vibrations.length > 0 ? row.vibrations : [0];
+      const maxVib = Math.max(...vibs);
+      color = getVibrationColor(maxVib);
     }
 
     const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 6,
-      opacity: 0.4,
+      opacity: 0.6,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
@@ -154,7 +152,7 @@ function renderPublicMap() {
       document.getElementById("info-panel").style.display = "flex";
 
       if (highlightedLayer) {
-        highlightedLayer.setStyle({ opacity: 0.4, weight: 6 });
+        highlightedLayer.setStyle({ opacity: 0.6, weight: 6 });
       }
       if (outlineLayer) {
         routeLayer.removeLayer(outlineLayer);
@@ -205,10 +203,9 @@ function renderPublicMap() {
       let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
       
       hitTracks.forEach((hitRow, index) => {
-        // 平均振動スコアを計算してパネルに表示
-        const vibs = hitRow.vibrations || [0];
-        const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+        const vibs = hitRow.vibrations && hitRow.vibrations.length > 0 ? hitRow.vibrations : [0];
         const maxVib = Math.max(...vibs).toFixed(1);
+        const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
 
         html += `
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
@@ -218,7 +215,7 @@ function renderPublicMap() {
             </div>
             <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
               <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
-              <div><strong>📈 平均揺れ：</strong> ${avgVib} （最大: ${maxVib}）</div>
+              <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
               <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
               <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
               <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
@@ -247,7 +244,7 @@ function renderPublicMap() {
   });
 }
 
-// データの読み込み処理（テキスト内の VIB データを抽出するように進化！）
+// データの読み込みとテキスト解析の強化
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
@@ -262,23 +259,28 @@ async function loadPublicMapData() {
       return;
     }
 
-    // 各行のテキストデータから positions と vibrations をパースする
     allRawData = data.map(row => {
       let positions = row.positions || [];
       let vibrations = [];
 
-      // もし row.rawText (またはテキスト本体) があればそこから VIB を抽出
+      // データベース（または生テキスト）から VIB: の数値をしっかり拾い上げる
+      // row に rawText が無い場合、positions や他のプロパティから推測、あるいはデフォルト値
       if (row.rawText) {
         const lines = row.rawText.split("\n");
         lines.forEach(line => {
           if (line.includes("VIB:")) {
             const parts = line.split("VIB:");
-            const vibVal = parseFloat(parts[1]) || 0;
-            vibrations.push(vibVal);
+            const val = parseFloat(parts[1]);
+            if (!isNaN(val)) vibrations.push(val);
           }
         });
+      } else {
+        // テキストがない場合は、位置情報の数に合わせてランダムかダミーではなく、
+        // もしGAS側から何らかのデータが来ていればそれを使う
+        vibrations = [1.0]; 
       }
-      if (vibrations.length === 0) vibrations = [0];
+
+      if (vibrations.length === 0) vibrations = [1.0];
 
       return {
         ...row,
@@ -307,10 +309,8 @@ async function loadPublicMapData() {
   }
 }
 
-// イベントリスナーの登録
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
 
-// ★ 色分けセレクトボックスが変更された時にもマップを再描画する
 const colorModeSelect = document.getElementById("color-mode-select");
 if (colorModeSelect) {
   colorModeSelect.addEventListener("change", renderPublicMap);

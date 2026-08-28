@@ -2,86 +2,81 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>みんなのバリアフリーマップ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MichiSAT - バリアフリーマップ</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 24px; font-family: system-ui, sans-serif; color: #334155; background: #f8fafc; }
-        header { max-width: 1200px; margin: 0 auto 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
-        h1 { margin: 0; font-size: 22px; color: #0f172a; }
-        #status-msg { font-size: 13px; color: #64748b; }
-        .main-container { max-width: 1200px; margin: 0 auto; display: flex; gap: 20px; }
-        #map { flex: 7; height: 600px; min-height: 400px; border-radius: 14px; border: 1px solid #cbd5e1; background: #e2e8f0; }
-        .sidebar { flex: 3; background: white; padding: 20px; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05); }
-        .sidebar h2 { font-size: 16px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; color: #0f172a; }
-        .form-group { margin-bottom: 16px; }
-        .btn { padding: 4px 8px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; font-weight: bold; cursor: pointer; font-size: 12px; color: #475569; }
-        .btn:hover { background: #f8fafc; }
-        .info-item { margin-bottom: 12px; }
-        .info-label { font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 2px; }
-        .info-value { font-size: 14px; color: #0f172a; word-break: break-word; }
-        .empty-message { color: #94a3b8; font-size: 13px; line-height: 1.7; }
-        @media (max-width: 800px) {
-            body { padding: 12px; }
-            header { flex-direction: column; align-items: flex-start; }
-            .main-container { flex-direction: column; }
-            #map { height: 400px; }
+        * { box-sizing: border-box; font-family: system-ui, sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e2e8f0; }
+        
+        /* 地図を画面いっぱいに */
+        #map { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* UIパネルの共通設定（地図の上に浮く） */
+        .ui-panel { position: absolute; z-index: 1000; background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+        /* 左上のヘッダー＆検索バー */
+        .top-left-panel { top: 16px; left: 16px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 32px); }
+        .app-title { margin: 0; font-size: 18px; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+        .search-box { display: flex; gap: 6px; }
+        .search-box input { flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-size: 14px; }
+        .search-box button { padding: 8px 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #status-msg { font-size: 12px; color: #64748b; }
+
+        /* 左下の表示設定（コンパクト） */
+        .bottom-left-panel { bottom: 24px; left: 16px; padding: 12px 16px; width: 220px; }
+        .bottom-left-panel h2 { margin: 0 0 8px; font-size: 14px; color: #334155; }
+        .filter-list { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+        .filter-list label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+        /* 右側のルート情報（最初は隠す） */
+        .info-panel { top: 16px; right: 16px; width: 340px; max-height: calc(100vh - 32px); max-width: calc(100vw - 32px); padding: 16px; display: none; flex-direction: column; overflow: hidden; }
+        .info-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
+        .info-panel-header h2 { margin: 0; font-size: 16px; color: #0f172a; }
+        .close-btn { background: #f1f5f9; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-weight: bold; color: #64748b; display: flex; align-items: center; justify-content: center; }
+        .close-btn:hover { background: #e2e8f0; }
+        #route-info-container { overflow-y: auto; padding-right: 4px; }
+
+        /* モバイル対応 */
+        @media (max-width: 600px) {
+            .bottom-left-panel { bottom: 24px; left: 16px; width: auto; }
+            .info-panel { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; border-radius: 20px 20px 0 0; max-height: 60vh; }
         }
     </style>
 </head>
 <body>
 
-<header>
-    <h1>♿ みんなで作るバリアフリーマップ</h1>
-    
-    <!-- メッセージと検索バーを横に並べる -->
-    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <div id="status-msg">⏳ データを読み込み中...</div>
-        
-        <!-- ★ ここに検索バーを移動！ -->
-        <div style="display: flex; gap: 4px;">
-            <input type="text" id="search-input" placeholder="地名・駅名で検索..." style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-size: 13px; width: 150px;">
-            <button id="search-btn" style="padding: 6px 10px; cursor: pointer; border: none; background-color: #3b82f6; color: white; border-radius: 6px; font-size: 13px;">🔍</button>
-        </div>
-    </div>
-</header>
+<div id="map"></div>
 
-<div class="main-container">
-    <div id="map"></div>
-    
-    <div class="sidebar">
-        <!-- ★ 表示設定（不要なチェックボックスを削除） -->
-        <h2>⚙️ 表示設定</h2>
-        <div class="form-group" style="margin-bottom: 20px;">
-            <div style="display: flex; gap: 6px; margin-bottom: 10px;">
-                <button type="button" id="btn-select-all" class="btn">すべて表示</button>
-                <button type="button" id="btn-reset-filter" class="btn">すべて隠す</button>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-                <label style="cursor: pointer;"><input type="checkbox" class="filter-cb" value="cat_electric" checked> 🟦 電動車いす</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="filter-cb" value="cat_manual_no_assist" checked> 🟩 自走式（介助なし）</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="filter-cb" value="cat_manual_assist" checked> 🟨 自走式（介助あり）</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="filter-cb" value="cat_caregiver" checked> 🟪 介助用</label>
-            </div>
-        </div>
-
-       <h2>📍 ルート情報</h2>
-        <!-- ★ ここから下を書き換え！スクロール可能な箱を用意します -->
-        <div id="route-info-container" style="max-height: 500px; overflow-y: auto; padding-right: 8px;">
-            <div class="empty-message" id="empty-message">
-                地図上のルートをクリックすると<br>重なっているすべての詳細情報が<br>新しい順に表示されます。
-            </div>
-        </div>
-        <div class="info-item"><div class="info-label">投稿ファイル</div><div class="info-value" id="info-filename">-</div></div>
-        <div class="info-item"><div class="info-label">日時</div><div class="info-value" id="info-datetime">-</div></div>
-        <div class="info-item"><div class="info-label">距離</div><div class="info-value" id="info-distance">-</div></div>
-        <div class="info-item"><div class="info-label">天気</div><div class="info-value" id="info-weather">-</div></div>
-        <div class="info-item"><div class="info-label">車いすの種類</div><div class="info-value" id="info-wheelchair">-</div></div>
-        <div class="info-item"><div class="info-label">介助の有無</div><div class="info-value" id="info-assistance">-</div></div>
-        <div class="info-item"><div class="info-label">メモ</div><div class="info-value" id="info-memo">-</div></div>
+<!-- 左上：ヘッダー＆検索 -->
+<div class="ui-panel top-left-panel">
+    <h1 class="app-title">♿ MichiSAT</h1>
+    <div class="search-box">
+        <input type="text" id="search-input" placeholder="場所を検索...">
+        <button id="search-btn">🔍</button>
     </div>
+    <div id="status-msg">⏳ データを読み込み中...</div>
+</div>
+
+<!-- 左下：表示設定 -->
+<div class="ui-panel bottom-left-panel">
+    <h2>⚙️ 表示設定</h2>
+    <div class="filter-list">
+        <label><input type="checkbox" class="filter-cb" value="cat_electric" checked> 🟦 電動車いす</label>
+        <label><input type="checkbox" class="filter-cb" value="cat_manual_no_assist" checked> 🟩 自走式（介助なし）</label>
+        <label><input type="checkbox" class="filter-cb" value="cat_manual_assist" checked> 🟨 自走式（介助あり）</label>
+        <label><input type="checkbox" class="filter-cb" value="cat_caregiver" checked> 🟪 介助用</label>
+    </div>
+</div>
+
+<!-- 右側（スマホなら下）：ルート情報 -->
+<div class="ui-panel info-panel" id="info-panel">
+    <div class="info-panel-header">
+        <h2>📍 ルート詳細</h2>
+        <button class="close-btn" onclick="document.getElementById('info-panel').style.display='none'">✕</button>
+    </div>
+    <div id="route-info-container"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

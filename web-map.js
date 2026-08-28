@@ -21,6 +21,38 @@ const baseMaps = {
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+
+if (searchInput && searchBtn) {
+  const doSearch = async () => {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    
+    searchBtn.innerHTML = '⏳';
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (data && data.length > 0) {
+        map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+      } else {
+        alert(`「${query}」が見つかりませんでした。`);
+      }
+    } catch (err) {
+      alert("検索エラーが発生しました。");
+    } finally {
+      searchBtn.innerHTML = '🔍';
+    }
+  };
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
@@ -50,34 +82,57 @@ function getVibrationColor(vibValue) {
   return "#22c55e";                      
 }
 
-// ★ 生テキストから座標と振動を"ペア"で抽出する最強関数
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 function parseNmeaWithVib(rawText) {
   const points = [];
   const vibs = [];
+
   if (!rawText) return { points, vibs };
 
-  const lines = rawText.split('\n');
+  const lines = rawText.split(/\r?\n/);
+
   lines.forEach(line => {
-    if (line.includes("VIB:") && (line.includes("GGA,") || line.includes("GNS,"))) {
-      const parts = line.split(",");
-      if (parts.length > 5 && parts[2].length > 3 && parts[4].length > 4) {
-        const latDeg = parseFloat(parts[2].substring(0, 2));
-        const latMin = parseFloat(parts[2].substring(2));
-        const lngDeg = parseFloat(parts[4].substring(0, 3));
-        const lngMin = parseFloat(parts[4].substring(3));
-        let lat = latDeg + (latMin / 60);
-        let lng = lngDeg + (lngMin / 60);
-        if (parts[3] === 'S') lat = -lat;
-        if (parts[5] === 'W') lng = -lng;
-        
-        const vibPart = line.split("VIB:")[1];
-        const vib = parseFloat(vibPart) || 0;
-        
-        points.push([lat, lng]);
-        vibs.push(vib);
-      }
+    if (!line.includes("$GPGGA,")) return;
+    if (!line.includes("VIB:")) return;
+
+    const parts = line.split(",");
+
+    if (parts.length < 6 || !parts[2] || !parts[3] || !parts[4] || !parts[5]) {
+      return;
     }
+
+    const latDeg = parseFloat(parts[2].substring(0, 2));
+    const latMin = parseFloat(parts[2].substring(2));
+    const lngDeg = parseFloat(parts[4].substring(0, 3));
+    const lngMin = parseFloat(parts[4].substring(3));
+
+    if (isNaN(latDeg) || isNaN(latMin) || isNaN(lngDeg) || isNaN(lngMin)) {
+      return;
+    }
+
+    let lat = latDeg + latMin / 60;
+    let lng = lngDeg + lngMin / 60;
+
+    if (parts[3] === "S") lat = -lat;
+    if (parts[5] === "W") lng = -lng;
+
+    const vibMatch = line.match(/VIB:([-+]?\d*\.?\d+)/);
+    if (!vibMatch) return;
+
+    const vib = parseFloat(vibMatch[1]);
+    if (isNaN(vib)) return;
+
+    points.push([lat, lng]);
+    vibs.push(vib);
   });
+
   return { points, vibs };
 }
 
@@ -95,19 +150,18 @@ function renderPublicMap() {
     if (!visibleCats.includes(cat)) return;
 
     const points = row.positions; 
-    const vibrations = row.vibrations;
-    if (!points || points.length < 2) return;
+    const vibrations = row.vibrations || [];
+    if (!points || points.length === 0) return;
 
-    if (colorMode === "wheelchair" || vibrations.length !== points.length) {
+    if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
       const polyline = L.polyline(points, {
         color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
-      setupRouteClickEvent(polyline, row);
+      setupRouteClickEvent(polyline, points, row, visibleCats);
       return;
     }
 
-    // 振動モード：地点ごとに色分け
     for (let i = 0; i < points.length - 1; i++) {
       const segmentPoints = [points[i], points[i + 1]];
       const vibVal = vibrations[i] || 0;
@@ -117,50 +171,102 @@ function renderPublicMap() {
         color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
 
-      setupRouteClickEvent(segPolyline, row);
+      setupRouteClickEvent(segPolyline, points, row, visibleCats);
     }
   });
 }
 
-function setupRouteClickEvent(polyline, row) {
-  polyline.on("click", () => {
-    // 既存のHTMLパネルに情報を流し込む
-    document.getElementById("info-datetime").textContent = row.datetime || "-";
-    document.getElementById("info-weather").textContent = row.weather || "-";
-    document.getElementById("info-wheelchair").textContent = row.wheelchair || "-";
-    document.getElementById("info-assistance").textContent = row.assistance || "-";
+function setupRouteClickEvent(polyline, points, row, visibleCats) {
+  polyline.on("click", (e) => {
+    document.getElementById("info-panel").style.display = "flex";
+
+    const clickLat = e.latlng.lat;
+    const clickLng = e.latlng.lng;
+    let hitTracks = [];
+
+    allRawData.forEach(searchRow => {
+      const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
+      if (!visibleCats.includes(searchCat)) return;
+      if (!searchRow.positions || searchRow.positions.length === 0) return;
+
+      let isHit = false;
+      for (let p of searchRow.positions) {
+        if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
+          isHit = true;
+          break;
+        }
+      }
+      if (isHit) hitTracks.push(searchRow);
+    });
+
+    hitTracks.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+
+    const container = document.querySelector("#route-info-container");
+    if (!container) return;
+
+    let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
     
-    const vibs = row.vibrations || [0];
-    const maxVib = Math.max(...vibs).toFixed(1);
-    const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
-    
-    const memoText = row.memo ? row.memo + " / " : "";
-    document.getElementById("info-memo").textContent = `${memoText}最大揺れ: ${maxVib} (平均: ${avgVib})`;
+    hitTracks.forEach((hitRow, index) => {
+      const vibs = hitRow.vibrations || [0];
+      const maxVib = Math.max(...vibs).toFixed(1);
+      const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+
+      html += `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+          <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span>${index + 1}件目の記録</span>
+            <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
+            <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
+            <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
+            <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
+            <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
+            <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
   });
 }
 
 async function loadPublicMapData() {
+  const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
 
   try {
+    statusMsg.textContent = "⏳ データを読み込み中...";
     const response = await fetch(gasUrl);
     const data = await response.json();
 
-    if (!Array.isArray(data) || data.length === 0) return;
+    if (!Array.isArray(data) || data.length === 0) {
+      statusMsg.textContent = "📭 データがありません";
+      return;
+    }
 
     allRawData = data.map(row => {
-      // 生データがあれば、JS側で確実にペアを作り直す！
+      let positions = row.positions || [];
+      let vibrations = [];
+
       if (row.rawText) {
         const parsed = parseNmeaWithVib(row.rawText);
         if (parsed.points.length > 0) {
-          row.positions = parsed.points;
-          row.vibrations = parsed.vibs;
+          positions = parsed.points;
+          vibrations = parsed.vibs;
         }
       }
-      if (!row.vibrations) row.vibrations = [];
-      return row;
+
+      if (vibrations.length === 0) vibrations = positions.map(() => 0.0);
+
+      return {
+        ...row,
+        positions: positions,
+        vibrations: vibrations
+      };
     });
 
+    statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     renderPublicMap();
 
     let allBounds = [];
@@ -172,7 +278,8 @@ async function loadPublicMapData() {
     }
 
   } catch (err) {
-    console.error("データ読み込みエラー:", err);
+    console.error(err);
+    statusMsg.textContent = "❌ 読み込み失敗";
   }
 }
 

@@ -1,8 +1,5 @@
 const map = L.map("map").setView([34.6937, 135.5022], 13);
 
-// ==========================================
-// 背景地図の設定（標準マップと航空写真の切り替え）
-// ==========================================
 const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
@@ -22,9 +19,6 @@ const baseMaps = {
 };
 L.control.layers(baseMaps).addTo(map);
 
-// ==========================================
-// HTMLに移動した検索バーを動かす処理
-// ==========================================
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
 
@@ -60,7 +54,6 @@ if (searchInput && searchBtn) {
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
-// カテゴリと色の設定
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -81,7 +74,6 @@ function getCategoryColor(category) {
   }
 }
 
-// 距離計算
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -90,7 +82,6 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// 軌跡をアイロンがけする関数（スムージング）
 function smoothLine(points) {
   if (!points || points.length < 3) return points;
   let smoothed = [];
@@ -108,13 +99,9 @@ function smoothLine(points) {
   return smoothed;
 }
 
-// ==========================================
-// 地図にデータと写真を描画する処理
-// ==========================================
 function renderPublicMap() {
   routeLayer.clearLayers();
   
-  // ★ 選択中の線とその元の色を記憶する変数
   let highlightedLayer = null;
   let highlightedOriginalColor = "";
 
@@ -141,10 +128,9 @@ function renderPublicMap() {
     }).addTo(routeLayer);
 
     polyline.on("click", (e) => {
-      // ==========================================
-      // ★ 選択した線を「白・不透明」にハイライトする処理
-      // ==========================================
-      // 1. 以前に選択されていた線があれば、元の薄い色に戻す
+      // ★ パネルをスッと出現させる！
+      document.getElementById("info-panel").style.display = "flex";
+
       if (highlightedLayer) {
         highlightedLayer.setStyle({
           color: highlightedOriginalColor,
@@ -153,22 +139,17 @@ function renderPublicMap() {
         });
       }
 
-      // 2. 今回クリックされた線を白(不透明)にする
       highlightedLayer = polyline;
       highlightedOriginalColor = color;
       polyline.setStyle({
-        color: "#ffffff", // 白色（※標準マップで見えにくい場合は "#000000" に変更してください）
-        opacity: 1.0,     // 不透明
-        weight: 8         // 少し太くしてさらに目立たせる
+        color: "#ffffff",
+        opacity: 1.0,
+        weight: 8
       });
-      polyline.bringToFront(); // 他の線より一番上に持ってくる！
+      polyline.bringToFront();
 
-      // ==========================================
-      // 周辺情報を探してリスト化する処理（変更なし）
-      // ==========================================
       const clickLat = e.latlng.lat;
       const clickLng = e.latlng.lng;
-      
       let hitTracks = [];
 
       allRawData.forEach(searchRow => {
@@ -211,12 +192,14 @@ function renderPublicMap() {
             <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
               ${index + 1}件目の記録 ${isLatest ? '（最新✨）' : ''}
             </div>
-            <div class="info-item"><div class="info-label">日時</div><div class="info-value">${hitRow.datetime || "-"}</div></div>
-            <div class="info-item"><div class="info-label">距離</div><div class="info-value">${distStr}</div></div>
-            <div class="info-item"><div class="info-label">天気</div><div class="info-value">${hitRow.weather || "-"}</div></div>
-            <div class="info-item"><div class="info-label">車いすの種類</div><div class="info-value">${hitRow.wheelchair || "-"}</div></div>
-            <div class="info-item"><div class="info-label">介助の有無</div><div class="info-value">${hitRow.assistance || "-"}</div></div>
-            <div class="info-item"><div class="info-label">メモ</div><div class="info-value">${hitRow.memo || "-"}</div></div>
+            <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
+              <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
+              <div><strong>📏 距離：</strong> ${distStr}</div>
+              <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
+              <div><strong>🦽 車いす：</strong> ${hitRow.wheelchair || "-"}</div>
+              <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
+              <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
+            </div>
           </div>
         `;
       });
@@ -241,10 +224,8 @@ function renderPublicMap() {
   });
 }
 
-// クラウド(GAS)からデータを取ってくる通信処理
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
-  
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
 
   try {
@@ -278,16 +259,5 @@ async function loadPublicMapData() {
   }
 }
 
-// 絞り込みチェックボックスのイベント
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
-
-document.querySelector("#btn-select-all").addEventListener("click", () => {
-  document.querySelectorAll(".filter-cb").forEach(cb => cb.checked = true);
-  renderPublicMap();
-});
-document.querySelector("#btn-reset-filter").addEventListener("click", () => {
-  document.querySelectorAll(".filter-cb").forEach(cb => cb.checked = false);
-  renderPublicMap();
-});
-
 loadPublicMapData();

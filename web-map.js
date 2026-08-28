@@ -114,6 +114,10 @@ function smoothLine(points) {
 function renderPublicMap() {
   routeLayer.clearLayers();
   
+  // ★ 選択中の線とその元の色を記憶する変数
+  let highlightedLayer = null;
+  let highlightedOriginalColor = "";
+
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
 
@@ -128,7 +132,6 @@ function renderPublicMap() {
     const beautifulPoints = smoothLine(points);
     const color = getCategoryColor(cat);
 
-    // ★ 透明度を0.3にして重ねて濃くする処理
     const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 6,
@@ -137,14 +140,37 @@ function renderPublicMap() {
       lineJoin: "round"
     }).addTo(routeLayer);
 
-    // ★ クリック時に周辺の軌跡をすべて探して新しい順に並べる処理
     polyline.on("click", (e) => {
+      // ==========================================
+      // ★ 選択した線を「白・不透明」にハイライトする処理
+      // ==========================================
+      // 1. 以前に選択されていた線があれば、元の薄い色に戻す
+      if (highlightedLayer) {
+        highlightedLayer.setStyle({
+          color: highlightedOriginalColor,
+          opacity: 0.3,
+          weight: 6
+        });
+      }
+
+      // 2. 今回クリックされた線を白(不透明)にする
+      highlightedLayer = polyline;
+      highlightedOriginalColor = color;
+      polyline.setStyle({
+        color: "#ffffff", // 白色（※標準マップで見えにくい場合は "#000000" に変更してください）
+        opacity: 1.0,     // 不透明
+        weight: 8         // 少し太くしてさらに目立たせる
+      });
+      polyline.bringToFront(); // 他の線より一番上に持ってくる！
+
+      // ==========================================
+      // 周辺情報を探してリスト化する処理（変更なし）
+      // ==========================================
       const clickLat = e.latlng.lat;
       const clickLng = e.latlng.lng;
       
       let hitTracks = [];
 
-      // 半径40m以内にある表示中の軌跡を探す
       allRawData.forEach(searchRow => {
         const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
         if (!visibleCats.includes(searchCat)) return;
@@ -160,14 +186,12 @@ function renderPublicMap() {
         if (isHit) hitTracks.push(searchRow);
       });
 
-      // 日時が「新しい順（降順）」になるように並び替え
       hitTracks.sort((a, b) => {
         const timeA = new Date(a.datetime || 0).getTime();
         const timeB = new Date(b.datetime || 0).getTime();
         return timeB - timeA;
       });
 
-      // サイドバーに結果を表示
       const container = document.querySelector("#route-info-container");
       if (!container) return;
 
@@ -183,9 +207,9 @@ function renderPublicMap() {
 
         const isLatest = index === 0;
         html += `
-         <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-  ${index + 1}件目の記録
-</div>
+          <div style="background: ${isLatest ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${isLatest ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+              ${index + 1}件目の記録 ${isLatest ? '（最新✨）' : ''}
             </div>
             <div class="info-item"><div class="info-label">日時</div><div class="info-value">${hitRow.datetime || "-"}</div></div>
             <div class="info-item"><div class="info-label">距離</div><div class="info-value">${distStr}</div></div>

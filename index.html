@@ -62,6 +62,15 @@
 <!-- 左下：表示設定 -->
 <div class="ui-panel bottom-left-panel">
     <h2>⚙️ 表示設定</h2>
+    
+    <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: bold;">🎨 色分けの基準</div>
+        <select id="color-mode-select" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; outline: none; background: #f8fafc; cursor: pointer;">
+            <option value="wheelchair">車いすの種類別</option>
+            <option value="vibration">振動の激しさ（ガタガタ度）</option>
+        </select>
+    </div>
+
     <div class="filter-list">
         <label><input type="checkbox" class="filter-cb" value="cat_electric" checked> 🟦 電動車いす</label>
         <label><input type="checkbox" class="filter-cb" value="cat_manual_no_assist" checked> 🟩 自走式（介助なし）</label>

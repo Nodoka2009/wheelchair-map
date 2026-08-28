@@ -76,11 +76,11 @@ function getCategoryColor(category) {
   }
 }
 
-// ★ 振動の強さに応じた色を返す関数（基準値を調整）
+// 振動の強さに応じた色
 function getVibrationColor(vibValue) {
-  if (vibValue >= 5.0) return "#ef4444"; // 赤：大きな段差・激しい揺れ（5以上）
-  if (vibValue >= 2.0) return "#f59e0b"; // 黄：少しガタガタ（2〜5）
-  return "#22c55e";                      // 緑：滑らかで快適（2未満）
+  if (vibValue >= 5.0) return "#ef4444"; // 赤：大きな段差
+  if (vibValue >= 2.0) return "#f59e0b"; // 黄：少しガタガタ
+  return "#22c55e";                      // 緑：快適
 }
 
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
@@ -91,28 +91,8 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-function smoothLine(points) {
-  if (!points || points.length < 3) return points;
-  let smoothed = [];
-  for (let i = 0; i < points.length; i++) {
-    let start = Math.max(0, i - 2);
-    let end = Math.min(points.length - 1, i + 2);
-    let sumLat = 0, sumLng = 0;
-    let count = end - start + 1;
-    for (let j = start; j <= end; j++) {
-      sumLat += points[j][0];
-      sumLng += points[j][1];
-    }
-    smoothed.push([sumLat / count, sumLng / count]);
-  }
-  return smoothed;
-}
-
 function renderPublicMap() {
   routeLayer.clearLayers();
-  
-  let highlightedLayer = null;
-  let outlineLayer = null;
 
   const colorModeSelect = document.getElementById("color-mode-select");
   const colorMode = colorModeSelect ? colorModeSelect.value : "wheelchair";
@@ -122,129 +102,96 @@ function renderPublicMap() {
 
   allRawData.forEach((row) => {
     const cat = getCategory(row.wheelchair, row.assistance);
-    const isVisible = visibleCats.includes(cat);
-    if (!isVisible) return;
+    if (!visibleCats.includes(cat)) return;
 
     const points = row.positions; 
+    const vibrations = row.vibrations || [];
     if (!points || points.length === 0) return;
 
-    const beautifulPoints = smoothLine(points);
-
-    let color = "#94a3b8";
-    if (colorMode === "wheelchair") {
-      color = getCategoryColor(cat);
-    } else {
-      // 振動モード：そのルートで検知された「最大の揺れ」を基準にする（または平均）
-      const vibs = row.vibrations && row.vibrations.length > 0 ? row.vibrations : [0];
-      const maxVib = Math.max(...vibs);
-      color = getVibrationColor(maxVib);
-    }
-
-    const polyline = L.polyline(beautifulPoints, {
-      color: color,
-      weight: 6,
-      opacity: 0.6,
-      lineCap: "round",
-      lineJoin: "round"
-    }).addTo(routeLayer);
-
-    polyline.on("click", (e) => {
-      document.getElementById("info-panel").style.display = "flex";
-
-      if (highlightedLayer) {
-        highlightedLayer.setStyle({ opacity: 0.6, weight: 6 });
-      }
-      if (outlineLayer) {
-        routeLayer.removeLayer(outlineLayer);
-      }
-
-      highlightedLayer = polyline;
-      polyline.setStyle({ opacity: 1.0, weight: 6 });
-
-      outlineLayer = L.polyline(beautifulPoints, {
-        color: "#ffffff",
-        weight: 12,
-        opacity: 1.0,
-        lineCap: "round",
-        lineJoin: "round"
+    // ★ モードが「車いす種類別」またはデータが足りない場合は、従来の1本線で描画
+    if (colorMode === "wheelchair" || vibrations.length < points.length) {
+      const color = getCategoryColor(cat);
+      const polyline = L.polyline(points, {
+        color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
 
-      outlineLayer.bringToFront();
-      polyline.bringToFront();
+      setupRouteClickEvent(polyline, points, row, visibleCats);
+      return;
+    }
 
-      const clickLat = e.latlng.lat;
-      const clickLng = e.latlng.lng;
-      let hitTracks = [];
+    // ★ モードが「振動」の場合：地点ごとに細かく分割して色を変える（渋滞情報風）
+    for (let i = 0; i < points.length - 1; i++) {
+      const segmentPoints = [points[i], points[i + 1]];
+      const vibVal = vibrations[i] || 0;
+      const segColor = getVibrationColor(vibVal);
 
-      allRawData.forEach(searchRow => {
-        const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
-        if (!visibleCats.includes(searchCat)) return;
-        if (!searchRow.positions || searchRow.positions.length === 0) return;
+      const segPolyline = L.polyline(segmentPoints, {
+        color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round"
+      }).addTo(routeLayer);
 
-        let isHit = false;
-        for (let p of searchRow.positions) {
-          if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
-            isHit = true;
-            break;
-          }
-        }
-        if (isHit) hitTracks.push(searchRow);
-      });
-
-      hitTracks.sort((a, b) => {
-        const timeA = new Date(a.datetime || 0).getTime();
-        const timeB = new Date(b.datetime || 0).getTime();
-        return timeB - timeA;
-      });
-
-      const container = document.querySelector("#route-info-container");
-      if (!container) return;
-
-      let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
-      
-      hitTracks.forEach((hitRow, index) => {
-        const vibs = hitRow.vibrations && hitRow.vibrations.length > 0 ? hitRow.vibrations : [0];
-        const maxVib = Math.max(...vibs).toFixed(1);
-        const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
-
-        html += `
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-              <span>${index + 1}件目の記録</span>
-              <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
-              <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
-              <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
-              <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
-              <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
-              <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
-            </div>
-          </div>
-        `;
-      });
-      container.innerHTML = html;
-    });
-
-    if (row.photos && row.photos.length > 0) {
-      row.photos.forEach(photo => {
-        const safeUrl = photo.url.replace(
-          "https://drive.google.com/uc?export=view&id=",
-          "https://lh3.googleusercontent.com/d/"
-        );
-        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
-        marker.bindPopup(`
-          <div style="text-align: center;">
-            <img src="${safeUrl}" style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-            <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
-          </div>
-        `, { maxWidth: 300 });
-      });
+      // セグメントごとのクリックイベント
+      setupRouteClickEvent(segPolyline, points, row, visibleCats);
     }
   });
 }
 
-// データの読み込みとテキスト解析の強化
+// クリック時の詳細表示を共通化する関数
+function setupRouteClickEvent(polyline, points, row, visibleCats) {
+  let highlighted = false;
+  polyline.on("click", (e) => {
+    document.getElementById("info-panel").style.display = "flex";
+
+    const clickLat = e.latlng.lat;
+    const clickLng = e.latlng.lng;
+    let hitTracks = [];
+
+    allRawData.forEach(searchRow => {
+      const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
+      if (!visibleCats.includes(searchCat)) return;
+      if (!searchRow.positions || searchRow.positions.length === 0) return;
+
+      let isHit = false;
+      for (let p of searchRow.positions) {
+        if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
+          isHit = true;
+          break;
+        }
+      }
+      if (isHit) hitTracks.push(searchRow);
+    });
+
+    hitTracks.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+
+    const container = document.querySelector("#route-info-container");
+    if (!container) return;
+
+    let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
+    
+    hitTracks.forEach((hitRow, index) => {
+      const vibs = hitRow.vibrations || [0];
+      const maxVib = Math.max(...vibs).toFixed(1);
+      const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+
+      html += `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+          <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span>${index + 1}件目の記録</span>
+            <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
+            <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
+            <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
+            <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
+            <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
+            <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  });
+}
+
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
@@ -263,8 +210,6 @@ async function loadPublicMapData() {
       let positions = row.positions || [];
       let vibrations = [];
 
-      // データベース（または生テキスト）から VIB: の数値をしっかり拾い上げる
-      // row に rawText が無い場合、positions や他のプロパティから推測、あるいはデフォルト値
       if (row.rawText) {
         const lines = row.rawText.split("\n");
         lines.forEach(line => {
@@ -274,13 +219,9 @@ async function loadPublicMapData() {
             if (!isNaN(val)) vibrations.push(val);
           }
         });
-      } else {
-        // テキストがない場合は、位置情報の数に合わせてランダムかダミーではなく、
-        // もしGAS側から何らかのデータが来ていればそれを使う
-        vibrations = [1.0]; 
       }
 
-      if (vibrations.length === 0) vibrations = [1.0];
+      if (vibrations.length === 0) vibrations = positions.map(() => 0.0);
 
       return {
         ...row,
@@ -290,14 +231,11 @@ async function loadPublicMapData() {
     });
 
     statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
-    
     renderPublicMap();
 
     let allBounds = [];
     allRawData.forEach(row => {
-      if (row.positions && row.positions.length > 0) {
-        row.positions.forEach(pt => allBounds.push(pt));
-      }
+      if (row.positions) row.positions.forEach(pt => allBounds.push(pt));
     });
     if (allBounds.length > 0) {
       map.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] });

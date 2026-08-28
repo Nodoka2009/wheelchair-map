@@ -21,41 +21,10 @@ const baseMaps = {
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
-const searchInput = document.getElementById('search-input');
-const searchBtn = document.getElementById('search-btn');
-
-if (searchInput && searchBtn) {
-  const doSearch = async () => {
-    const query = searchInput.value.trim();
-    if (!query) return;
-    
-    searchBtn.innerHTML = '⏳';
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      if (data && data.length > 0) {
-        map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
-      } else {
-        alert(`「${query}」が見つかりませんでした。`);
-      }
-    } catch (err) {
-      alert("検索エラーが発生しました。");
-    } finally {
-      searchBtn.innerHTML = '🔍';
-    }
-  };
-
-  searchBtn.addEventListener('click', doSearch);
-  searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') doSearch();
-  });
-}
-
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
+// ★ 追加：ベビーカー等を「cat_other」として判定
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -63,15 +32,18 @@ function getCategory(wheelchair, assistance) {
     return (assistance && assistance.includes("あり")) ? "cat_manual_assist" : "cat_manual_no_assist";
   }
   if (wheelchair.includes("介助")) return "cat_caregiver";
+  if (wheelchair.includes("その他") || wheelchair.includes("ベビーカー")) return "cat_other";
   return "cat_unknown";
 }
 
+// ★ 追加：その他を「灰色」に設定
 function getCategoryColor(category) {
   switch(category) {
     case "cat_electric": return "#3b82f6";
     case "cat_manual_no_assist": return "#22c55e";
     case "cat_manual_assist": return "#eab308";
     case "cat_caregiver": return "#a855f7";
+    case "cat_other": return "#64748b"; // ★ 濃いめの灰色
     default: return "#94a3b8";
   }
 }
@@ -90,7 +62,29 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// ★ 未測位GPS座標を完全に無視する安全な解析関数
+// ★ 追加：時間を「朝・昼・晩」に変換する機能
+function formatTimeOfDay(datetimeStr) {
+  if (!datetimeStr || datetimeStr === "-") return "-";
+  try {
+    const parts = datetimeStr.split(" ");
+    const datePart = parts[0].replace(/-/g, "/"); 
+    const timePart = parts[1] || "";
+    
+    let hour = 12;
+    if (timePart.includes(":")) {
+      hour = parseInt(timePart.split(":")[0], 10);
+    }
+
+    let timeOfDay = "晩";
+    if (hour >= 4 && hour < 11) timeOfDay = "朝";
+    else if (hour >= 11 && hour < 16) timeOfDay = "昼";
+    
+    return `${datePart} ${timeOfDay}`;
+  } catch(e) {
+    return datetimeStr;
+  }
+}
+
 function parseNmeaWithVib(rawText) {
   const points = [];
   const vibs = [];
@@ -100,7 +94,6 @@ function parseNmeaWithVib(rawText) {
   const lines = rawText.split(/\r?\n/);
 
   lines.forEach(line => {
-    // GPGGAだけ使用
     if (!line.includes("$GPGGA,")) return;
     if (!line.includes("VIB:")) return;
 
@@ -108,10 +101,7 @@ function parseNmeaWithVib(rawText) {
 
     if (parts.length < 7) return;
 
-    // GGAの測位状態 (0 = 測位なし, 1以上 = 測位あり)
     const fixQuality = parseInt(parts[6], 10);
-
-    // 測位できていない点は完全に無視
     if (isNaN(fixQuality) || fixQuality === 0) return;
 
     if (!parts[2] || !parts[3] || !parts[4] || !parts[5]) return;
@@ -216,6 +206,9 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const vibs = hitRow.vibrations || [0];
       const maxVib = Math.max(...vibs).toFixed(1);
       const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+      
+      // ★ 変更：日時の表示を朝・昼・晩に変換
+      const timeStr = formatTimeOfDay(hitRow.datetime);
 
       html += `
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
@@ -224,7 +217,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
             <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
           </div>
           <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
-            <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
+            <div><strong>🗓️ 日時：</strong> ${timeStr}</div>
             <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
             <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
             <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>

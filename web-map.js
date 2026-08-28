@@ -103,7 +103,7 @@ function renderPublicMap() {
   routeLayer.clearLayers();
   
   let highlightedLayer = null;
-  let highlightedOriginalColor = "";
+  let outlineLayer = null;
 
   const checkboxes = document.querySelectorAll(".filter-cb");
   const visibleCats = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
@@ -128,24 +128,27 @@ function renderPublicMap() {
     }).addTo(routeLayer);
 
     polyline.on("click", (e) => {
-      // ★ パネルをスッと出現させる！
       document.getElementById("info-panel").style.display = "flex";
 
       if (highlightedLayer) {
-        highlightedLayer.setStyle({
-          color: highlightedOriginalColor,
-          opacity: 0.3,
-          weight: 6
-        });
+        highlightedLayer.setStyle({ opacity: 0.3, weight: 6 });
+      }
+      if (outlineLayer) {
+        routeLayer.removeLayer(outlineLayer);
       }
 
       highlightedLayer = polyline;
-      highlightedOriginalColor = color;
-      polyline.setStyle({
+      polyline.setStyle({ opacity: 1.0, weight: 6 });
+
+      outlineLayer = L.polyline(beautifulPoints, {
         color: "#ffffff",
+        weight: 12,
         opacity: 1.0,
-        weight: 8
-      });
+        lineCap: "round",
+        lineJoin: "round"
+      }).addTo(routeLayer);
+
+      outlineLayer.bringToFront();
       polyline.bringToFront();
 
       const clickLat = e.latlng.lat;
@@ -179,24 +182,15 @@ function renderPublicMap() {
       let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
       
       hitTracks.forEach((hitRow, index) => {
-        let totalDist = 0;
-        let bPoints = smoothLine(hitRow.positions);
-        for (let i = 1; i < bPoints.length; i++) {
-          totalDist += getDistanceMeters(bPoints[i-1][0], bPoints[i-1][1], bPoints[i][0], bPoints[i][1]);
-        }
-        const distStr = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
-
-        const isLatest = index === 0;
         html += `
-          <div style="background: ${isLatest ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${isLatest ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-              ${index + 1}件目の記録 ${isLatest ? '（最新✨）' : ''}
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <span>${index + 1}件目の記録</span>
+              <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
               <div><strong>🗓️ 日時：</strong> ${hitRow.datetime || "-"}</div>
-              <div><strong>📏 距離：</strong> ${distStr}</div>
               <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
-              <div><strong>🦽 車いす：</strong> ${hitRow.wheelchair || "-"}</div>
               <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
               <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
             </div>

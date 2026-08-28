@@ -133,8 +133,8 @@ function renderPublicMap() {
 
     const polyline = L.polyline(beautifulPoints, {
       color: color,
-      weight: 5,
-      opacity: 0.8,
+      weight: 6,      // ★ ついでに少し太くする（5→6）と重なりが綺麗に見えます！
+      opacity: 0.2,   // ★ ここを 0.8 から 0.3 に下げる！
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);

@@ -23,7 +23,7 @@ const baseMaps = {
 L.control.layers(baseMaps).addTo(map);
 
 // ==========================================
-// ★ 新機能：HTMLに移動した検索バーを動かす処理
+// HTMLに移動した検索バーを動かす処理
 // ==========================================
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
@@ -33,14 +33,13 @@ if (searchInput && searchBtn) {
     const query = searchInput.value.trim();
     if (!query) return;
     
-    searchBtn.innerHTML = '⏳'; // 検索中は砂時計に
+    searchBtn.innerHTML = '⏳';
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
       const res = await fetch(url);
       const data = await res.json();
       
       if (data && data.length > 0) {
-        // 見つかったらその場所にフワッと飛ぶ！
         map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
       } else {
         alert(`「${query}」が見つかりませんでした。別のキーワードを試してください。`);
@@ -48,20 +47,16 @@ if (searchInput && searchBtn) {
     } catch (err) {
       alert("検索エラーが発生しました。");
     } finally {
-      searchBtn.innerHTML = '🔍'; // ボタンを元に戻す
+      searchBtn.innerHTML = '🔍';
     }
   };
 
-  // クリックまたはEnterキーで検索実行
   searchBtn.addEventListener('click', doSearch);
   searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') doSearch();
   });
 }
 
-// ==========================================
-// これ以降は今までのコードと同じです
-// ==========================================
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
@@ -113,8 +108,9 @@ function smoothLine(points) {
   return smoothed;
 }
 
+// ==========================================
 // 地図にデータと写真を描画する処理
-// 地図にデータと写真を描画する処理
+// ==========================================
 function renderPublicMap() {
   routeLayer.clearLayers();
   
@@ -132,6 +128,7 @@ function renderPublicMap() {
     const beautifulPoints = smoothLine(points);
     const color = getCategoryColor(cat);
 
+    // ★ 透明度を0.3にして重ねて濃くする処理
     const polyline = L.polyline(beautifulPoints, {
       color: color,
       weight: 6,
@@ -140,17 +137,14 @@ function renderPublicMap() {
       lineJoin: "round"
     }).addTo(routeLayer);
 
-    // ==========================================
-    // ★ 大改造：クリック時に周辺の軌跡をすべて探して新しい順に並べる！
-    // ==========================================
+    // ★ クリック時に周辺の軌跡をすべて探して新しい順に並べる処理
     polyline.on("click", (e) => {
-      // e.latlng がクリックした地図上の座標
       const clickLat = e.latlng.lat;
       const clickLng = e.latlng.lng;
       
       let hitTracks = [];
 
-      // 1. クリックした地点から「半径40m以内」にある表示中の軌跡をすべて探す
+      // 半径40m以内にある表示中の軌跡を探す
       allRawData.forEach(searchRow => {
         const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
         if (!visibleCats.includes(searchCat)) return;
@@ -166,18 +160,18 @@ function renderPublicMap() {
         if (isHit) hitTracks.push(searchRow);
       });
 
-      // 2. 日時が「新しい順（降順）」になるように並び替え
+      // 日時が「新しい順（降順）」になるように並び替え
       hitTracks.sort((a, b) => {
         const timeA = new Date(a.datetime || 0).getTime();
         const timeB = new Date(b.datetime || 0).getTime();
-        return timeB - timeA; // BからAを引くことで新しい順になる
+        return timeB - timeA;
       });
 
-      // 3. サイドバーのHTMLを動的に生成する
+      // サイドバーに結果を表示
       const container = document.querySelector("#route-info-container");
       if (!container) return;
 
-      let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この道を通った記録：${hitTracks.length}件</div>`;
+      let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
       
       hitTracks.forEach((hitRow, index) => {
         let totalDist = 0;
@@ -187,7 +181,6 @@ function renderPublicMap() {
         }
         const distStr = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
 
-        // 1番新しいデータだけ背景色を水色にして目立たせる！
         const isLatest = index === 0;
         html += `
           <div style="background: ${isLatest ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${isLatest ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
@@ -206,9 +199,6 @@ function renderPublicMap() {
       container.innerHTML = html;
     });
 
-    // ==========================================
-    // 写真のピンを立てる処理
-    // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
         const safeUrl = photo.url.replace(
@@ -220,31 +210,6 @@ function renderPublicMap() {
           <div style="text-align: center;">
             <img src="${safeUrl}" style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
             <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
-          </div>
-        `, { maxWidth: 300 });
-      });
-    }
-  });
-}
-    if (row.photos && row.photos.length > 0) {
-      row.photos.forEach(photo => {
-        const safeUrl = photo.url.replace(
-          "https://drive.google.com/uc?export=view&id=",
-          "https://lh3.googleusercontent.com/d/"
-        );
-
-        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
-        
-        marker.bindPopup(`
-          <div style="text-align: center;">
-            <img
-              src="${safeUrl}"
-              style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto;"
-              onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-            >
-            <div style="display:none; color:#666; padding:10px;">
-              📷 写真を読み込めませんでした
-            </div>
           </div>
         `, { maxWidth: 300 });
       });
@@ -301,5 +266,4 @@ document.querySelector("#btn-reset-filter").addEventListener("click", () => {
   renderPublicMap();
 });
 
-// 起動時にデータを読み込む
 loadPublicMapData();

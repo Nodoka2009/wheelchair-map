@@ -183,9 +183,9 @@ function renderPublicMap() {
 
         const isLatest = index === 0;
         html += `
-          <div style="background: ${isLatest ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${isLatest ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
-              ${index + 1}件目の記録 ${isLatest ? '（最新✨）' : ''}
+         <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+  ${index + 1}件目の記録
+</div>
             </div>
             <div class="info-item"><div class="info-label">日時</div><div class="info-value">${hitRow.datetime || "-"}</div></div>
             <div class="info-item"><div class="info-label">距離</div><div class="info-value">${distStr}</div></div>

@@ -114,6 +114,7 @@ function smoothLine(points) {
 }
 
 // 地図にデータと写真を描画する処理
+// 地図にデータと写真を描画する処理
 function renderPublicMap() {
   routeLayer.clearLayers();
   
@@ -133,28 +134,98 @@ function renderPublicMap() {
 
     const polyline = L.polyline(beautifulPoints, {
       color: color,
-      weight: 6,      // ★ ついでに少し太くする（5→6）と重なりが綺麗に見えます！
-      opacity: 0.2,   // ★ ここを 0.8 から 0.3 に下げる！
+      weight: 6,
+      opacity: 0.3,
       lineCap: "round",
       lineJoin: "round"
     }).addTo(routeLayer);
 
-    polyline.on("click", () => {
-      document.querySelector("#empty-message").style.display = "none";
-      document.querySelector("#info-filename").textContent = row.fileName || "-";
-      document.querySelector("#info-datetime").textContent = row.datetime || "-";
-      document.querySelector("#info-weather").textContent = row.weather || "-";
-      document.querySelector("#info-wheelchair").textContent = row.wheelchair || "-";
-      document.querySelector("#info-assistance").textContent = row.assistance || "-";
-      document.querySelector("#info-memo").textContent = row.memo || "クラウド共有データ";
+    // ==========================================
+    // ★ 大改造：クリック時に周辺の軌跡をすべて探して新しい順に並べる！
+    // ==========================================
+    polyline.on("click", (e) => {
+      // e.latlng がクリックした地図上の座標
+      const clickLat = e.latlng.lat;
+      const clickLng = e.latlng.lng;
+      
+      let hitTracks = [];
 
-      let totalDist = 0;
-      for (let i = 1; i < beautifulPoints.length; i++) {
-        totalDist += getDistanceMeters(beautifulPoints[i-1][0], beautifulPoints[i-1][1], beautifulPoints[i][0], beautifulPoints[i][1]);
-      }
-      document.querySelector("#info-distance").textContent = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
+      // 1. クリックした地点から「半径40m以内」にある表示中の軌跡をすべて探す
+      allRawData.forEach(searchRow => {
+        const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
+        if (!visibleCats.includes(searchCat)) return;
+        if (!searchRow.positions || searchRow.positions.length === 0) return;
+
+        let isHit = false;
+        for (let p of searchRow.positions) {
+          if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
+            isHit = true;
+            break;
+          }
+        }
+        if (isHit) hitTracks.push(searchRow);
+      });
+
+      // 2. 日時が「新しい順（降順）」になるように並び替え
+      hitTracks.sort((a, b) => {
+        const timeA = new Date(a.datetime || 0).getTime();
+        const timeB = new Date(b.datetime || 0).getTime();
+        return timeB - timeA; // BからAを引くことで新しい順になる
+      });
+
+      // 3. サイドバーのHTMLを動的に生成する
+      const container = document.querySelector("#route-info-container");
+      if (!container) return;
+
+      let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この道を通った記録：${hitTracks.length}件</div>`;
+      
+      hitTracks.forEach((hitRow, index) => {
+        let totalDist = 0;
+        let bPoints = smoothLine(hitRow.positions);
+        for (let i = 1; i < bPoints.length; i++) {
+          totalDist += getDistanceMeters(bPoints[i-1][0], bPoints[i-1][1], bPoints[i][0], bPoints[i][1]);
+        }
+        const distStr = totalDist >= 1000 ? `${(totalDist / 1000).toFixed(2)} km` : `${Math.round(totalDist)} m`;
+
+        // 1番新しいデータだけ背景色を水色にして目立たせる！
+        const isLatest = index === 0;
+        html += `
+          <div style="background: ${isLatest ? '#f0f9ff' : '#f8fafc'}; border: 1px solid ${isLatest ? '#bae6fd' : '#e2e8f0'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+              ${index + 1}件目の記録 ${isLatest ? '（最新✨）' : ''}
+            </div>
+            <div class="info-item"><div class="info-label">日時</div><div class="info-value">${hitRow.datetime || "-"}</div></div>
+            <div class="info-item"><div class="info-label">距離</div><div class="info-value">${distStr}</div></div>
+            <div class="info-item"><div class="info-label">天気</div><div class="info-value">${hitRow.weather || "-"}</div></div>
+            <div class="info-item"><div class="info-label">車いすの種類</div><div class="info-value">${hitRow.wheelchair || "-"}</div></div>
+            <div class="info-item"><div class="info-label">介助の有無</div><div class="info-value">${hitRow.assistance || "-"}</div></div>
+            <div class="info-item"><div class="info-label">メモ</div><div class="info-value">${hitRow.memo || "-"}</div></div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
     });
 
+    // ==========================================
+    // 写真のピンを立てる処理
+    // ==========================================
+    if (row.photos && row.photos.length > 0) {
+      row.photos.forEach(photo => {
+        const safeUrl = photo.url.replace(
+          "https://drive.google.com/uc?export=view&id=",
+          "https://lh3.googleusercontent.com/d/"
+        );
+        const marker = L.marker([photo.lat, photo.lng]).addTo(routeLayer);
+        marker.bindPopup(`
+          <div style="text-align: center;">
+            <img src="${safeUrl}" style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
+          </div>
+        `, { maxWidth: 300 });
+      });
+    }
+  });
+}
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
         const safeUrl = photo.url.replace(

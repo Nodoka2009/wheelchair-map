@@ -62,24 +62,29 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// ★ 追加：時間を「朝・昼・晩」に変換する機能
+// ★ 修正：時間を「朝・昼・晩」に変換し、変な文字(TやZ)を消す機能
 function formatTimeOfDay(datetimeStr) {
   if (!datetimeStr || datetimeStr === "-") return "-";
   try {
-    const parts = datetimeStr.split(" ");
-    const datePart = parts[0].replace(/-/g, "/"); 
-    const timePart = parts[1] || "";
+    // どんな形式の文字列でも、一度正式な「日時データ」として読み込む
+    const d = new Date(datetimeStr);
     
-    let hour = 12;
-    if (timePart.includes(":")) {
-      hour = parseInt(timePart.split(":")[0], 10);
-    }
+    // もし正しく読み込めなかった場合は元の文字列を返す
+    if (isNaN(d.getTime())) return datetimeStr;
+
+    // 年・月・日を綺麗にフォーマット（1桁の月日はゼロ埋め）
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    
+    // 日本時間での「時」を取得
+    const hour = d.getHours();
 
     let timeOfDay = "晩";
     if (hour >= 4 && hour < 11) timeOfDay = "朝";
     else if (hour >= 11 && hour < 16) timeOfDay = "昼";
     
-    return `${datePart} ${timeOfDay}`;
+    return `${yyyy}/${mm}/${dd} ${timeOfDay}`;
   } catch(e) {
     return datetimeStr;
   }

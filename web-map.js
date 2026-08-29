@@ -21,10 +21,41 @@ const baseMaps = {
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+
+if (searchInput && searchBtn) {
+  const doSearch = async () => {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    
+    searchBtn.innerHTML = '⏳';
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      
+      if (data && data.length > 0) {
+        map.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+      } else {
+        alert(`「${query}」が見つかりませんでした。`);
+      }
+    } catch (err) {
+      alert("検索エラーが発生しました。");
+    } finally {
+      searchBtn.innerHTML = '🔍';
+    }
+  };
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
-// ★ 追加：ベビーカー等を「cat_other」として判定
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
   if (wheelchair.includes("電動")) return "cat_electric";
@@ -36,14 +67,13 @@ function getCategory(wheelchair, assistance) {
   return "cat_unknown";
 }
 
-// ★ 追加：その他を「灰色」に設定
 function getCategoryColor(category) {
   switch(category) {
     case "cat_electric": return "#3b82f6";
     case "cat_manual_no_assist": return "#22c55e";
     case "cat_manual_assist": return "#eab308";
     case "cat_caregiver": return "#a855f7";
-    case "cat_other": return "#64748b"; // ★ 濃いめの灰色
+    case "cat_other": return "#64748b"; // 灰色
     default: return "#94a3b8";
   }
 }
@@ -62,22 +92,14 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-// ★ 修正：時間を「朝・昼・晩」に変換し、変な文字(TやZ)を消す機能
 function formatTimeOfDay(datetimeStr) {
   if (!datetimeStr || datetimeStr === "-") return "-";
   try {
-    // どんな形式の文字列でも、一度正式な「日時データ」として読み込む
     const d = new Date(datetimeStr);
-    
-    // もし正しく読み込めなかった場合は元の文字列を返す
     if (isNaN(d.getTime())) return datetimeStr;
-
-    // 年・月・日を綺麗にフォーマット（1桁の月日はゼロ埋め）
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
-    
-    // 日本時間での「時」を取得
     const hour = d.getHours();
 
     let timeOfDay = "晩";
@@ -211,8 +233,6 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const vibs = hitRow.vibrations || [0];
       const maxVib = Math.max(...vibs).toFixed(1);
       const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
-      
-      // ★ 変更：日時の表示を朝・昼・晩に変換
       const timeStr = formatTimeOfDay(hitRow.datetime);
 
       html += `
@@ -253,8 +273,10 @@ async function loadPublicMapData() {
       let positions = row.positions || [];
       let vibrations = [];
 
-      if (row.rawText) {
-        const parsed = parseNmeaWithVib(row.rawText);
+      // ★ 修正：row.rawText ではなく row.nmeaText（両対応にして安全に）
+      const rawNmea = row.nmeaText || row.rawText;
+      if (rawNmea) {
+        const parsed = parseNmeaWithVib(rawNmea);
         if (parsed.points.length > 0) {
           positions = parsed.points;
           vibrations = parsed.vibs;

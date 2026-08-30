@@ -1,26 +1,26 @@
-// ★ 追加：強調（ハイライト）と、折りたたみ機能・スクロール用のCSSを自動適用
+// ★ 追加：強調（ハイライト）と、最小化用のCSSを自動適用
 const style = document.createElement('style');
 style.innerHTML = `
   .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; }
   .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
- .route-selected-glow {
-  pointer-events: none;
-}
+  .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+  .route-selected-glow { pointer-events: none; }
 
-  /* ★ 追加：折りたたみ（アコーディオン）用スタイル */
-  .collapsible-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: opacity 0.2s; }
-  .collapsible-header:hover { opacity: 0.7; }
-  .collapsed-content { display: none !important; }
-
-  /* ★ 追加：ルート詳細のスクロール設定（約2件分の高さ） */
+  /* ルート詳細のスクロール設定（約2件分の高さ） */
   #route-cards-wrapper { max-height: 290px; overflow-y: auto; padding-right: 6px; }
   #route-cards-wrapper::-webkit-scrollbar { width: 6px; }
   #route-cards-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
-  /* ★ 追加：最小化された時の設定 */
+  /* 右パネル（ルート詳細）の最小化設定 */
   #info-panel.minimized #route-info-container { display: none !important; }
   #minimize-panel-btn { background: transparent; border: none; font-size: 14px; cursor: pointer; color: #64748b; margin-right: 12px; }
   #minimize-panel-btn:hover { color: #0f172a; }
+
+  /* 左パネル（表示設定）の最小化設定 */
+  .panel-minimize-btn { background: transparent; border: none; font-size: 14px; cursor: pointer; color: #64748b; }
+  .panel-minimize-btn:hover { color: #0f172a; }
+  .details-panel.minimized > div, 
+  .details-panel.minimized > h2:not(:first-child) { display: none !important; }
 `;
 document.head.appendChild(style);
 
@@ -291,30 +291,16 @@ function renderPublicMap() {
 
 function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
-
-    // =========================
-    // ① 情報パネルを取得
-    // =========================
     const infoPanel = document.getElementById("info-panel");
-
-    if (!infoPanel) {
-      console.error("❌ #info-panel が見つかりません");
-      return;
-    }
+    if (!infoPanel) return;
 
     infoPanel.style.display = "flex";
     infoPanel.classList.remove("minimized");
 
-    // =========================
-    // ② 最小化ボタンを作成
-    // =========================
     let minBtn = document.getElementById("minimize-panel-btn");
 
     if (!minBtn) {
-      // info-panel内のボタンを探す
       const buttons = infoPanel.querySelectorAll("button");
-
-      // 最初のボタンを閉じるボタンとして扱う
       const closeBtn = buttons.length > 0 ? buttons[0] : null;
 
       minBtn = document.createElement("button");
@@ -329,265 +315,78 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
 
       if (closeBtn && closeBtn.parentNode) {
         closeBtn.parentNode.insertBefore(minBtn, closeBtn);
-
-        // 元の×ボタンは隠す
         closeBtn.style.display = "none";
       } else {
-        // 閉じるボタンがない場合
         infoPanel.insertBefore(minBtn, infoPanel.firstChild);
       }
     }
 
-    // =========================
-    // ③ クリック地点
-    // =========================
     const clickLat = e.latlng.lat;
     const clickLng = e.latlng.lng;
-
     let hitTracks = [];
 
-    // =========================
-    // ④ クリック地点付近の軌跡を探す
-    // =========================
     allRawData.forEach(searchRow => {
-
-      const searchCat = getCategory(
-        searchRow.wheelchair,
-        searchRow.assistance
-      );
-
+      const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
       if (!visibleCats.includes(searchCat)) return;
-
-      if (
-        !searchRow.positions ||
-        searchRow.positions.length === 0
-      ) {
-        return;
-      }
+      if (!searchRow.positions || searchRow.positions.length === 0) return;
 
       let isHit = false;
-
       for (const p of searchRow.positions) {
-        const distance = getDistanceMeters(
-          clickLat,
-          clickLng,
-          p[0],
-          p[1]
-        );
-
-        if (distance < 40) {
+        if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
           isHit = true;
           break;
         }
       }
-
-      if (isHit) {
-        hitTracks.push(searchRow);
-      }
+      if (isHit) hitTracks.push(searchRow);
     });
 
-    // =========================
-    // ⑤ 新しい記録を上に
-    // =========================
-    hitTracks.sort(
-      (a, b) =>
-        new Date(b.datetime || 0) -
-        new Date(a.datetime || 0)
-    );
+    hitTracks.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
 
-    // =========================
-    // ⑥ 情報表示エリア
-    // =========================
-    const container =
-      document.querySelector("#route-info-container");
+    const container = document.querySelector("#route-info-container");
+    if (!container) return;
 
-    if (!container) {
-      console.error("❌ #route-info-container が見つかりません");
-      return;
-    }
-
-    // =========================
-    // ⑦ HTML作成
-    // =========================
+    // ★ 修正：▼の折りたたみ機能を消し、普通の固定見出しに変更
     let html = `
-      <div
-        class="collapsible-header"
-        id="nearby-records-header"
-        style="
-          margin-bottom: 12px;
-          font-size: 13px;
-          color: #3b82f6;
-          font-weight: bold;
-          background: #eff6ff;
-          padding: 8px 12px;
-          border-radius: 6px;
-        "
-      >
-        <span>
-          ✅ この周辺の記録：${hitTracks.length}件
-        </span>
-
-        <span class="toggle-icon">▼</span>
+      <div id="nearby-records-header" style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold; background: #eff6ff; padding: 8px 12px; border-radius: 6px;">
+        <span>✅ この周辺の記録：${hitTracks.length}件</span>
       </div>
-
       <div id="route-cards-wrapper">
     `;
 
-    // =========================
-    // ⑧ カード作成
-    // =========================
     hitTracks.forEach((hitRow, index) => {
-
       const vibs = hitRow.vibrations || [0];
-
-      const maxVib =
-        Math.max(...vibs).toFixed(1);
-
-      const avgVib =
-        (
-          vibs.reduce((a, b) => a + b, 0) /
-          vibs.length
-        ).toFixed(1);
-
-      const timeStr =
-        formatTimeOfDay(hitRow.datetime);
+      const maxVib = Math.max(...vibs).toFixed(1);
+      const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
+      const timeStr = formatTimeOfDay(hitRow.datetime);
 
       html += `
-        <div
-          id="record-card-${hitRow.id}"
-          class="record-card"
-          data-route-id="${hitRow.id}"
-          style="
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-          "
-        >
-
-          <div
-            style="
-              font-size: 12px;
-              color: #64748b;
-              font-weight: bold;
-              margin-bottom: 8px;
-              border-bottom: 1px solid #e2e8f0;
-              padding-bottom: 6px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            "
-          >
+        <div id="record-card-${hitRow.id}" class="record-card" data-route-id="${hitRow.id}" style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+          <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
             <span>${index + 1}件目の記録</span>
-
-            <span
-              style="
-                background: #e2e8f0;
-                padding: 4px 8px;
-                border-radius: 12px;
-                color: #334155;
-              "
-            >
-              🦽 ${hitRow.wheelchair || "-"}
-            </span>
+            <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
           </div>
-
-          <div
-            style="
-              display:flex;
-              flex-direction:column;
-              gap:6px;
-              font-size:13px;
-              color:#334155;
-            "
-          >
-            <div>
-              <strong>🗓️ 日時：</strong>
-              ${timeStr}
-            </div>
-
-            <div>
-              <strong>📈 最大の揺れ：</strong>
-              ${maxVib}
-              （平均: ${avgVib}）
-            </div>
-
-            <div>
-              <strong>☀️ 天気：</strong>
-              ${hitRow.weather || "-"}
-            </div>
-
-            <div>
-              <strong>🤝 介助：</strong>
-              ${hitRow.assistance || "-"}
-            </div>
-
-            <div>
-              <strong>📝 メモ：</strong>
-              ${hitRow.memo || "-"}
-            </div>
+          <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
+            <div><strong>🗓️ 日時：</strong> ${timeStr}</div>
+            <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
+            <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
+            <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
+            <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
           </div>
-
         </div>
       `;
     });
 
     html += `</div>`;
-
     container.innerHTML = html;
 
-    // =========================
-    // ⑨ 周辺記録の折りたたみ
-    // =========================
-    const recordsHeader =
-      document.getElementById("nearby-records-header");
-
-    const recordsWrapper =
-      document.getElementById("route-cards-wrapper");
-
-    if (recordsHeader && recordsWrapper) {
-
-      recordsHeader.addEventListener("click", () => {
-
-        recordsWrapper.classList.toggle(
-          "collapsed-content"
-        );
-
-        const icon =
-          recordsHeader.querySelector(".toggle-icon");
-
-        if (icon) {
-          icon.innerText =
-            recordsWrapper.classList.contains(
-              "collapsed-content"
-            )
-              ? "▶"
-              : "▼";
-        }
+    container.querySelectorAll(".record-card").forEach(card => {
+      card.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const routeId = card.dataset.routeId;
+        highlightRouteAndCard(routeId);
       });
-    }
+    });
 
-    // =========================
-    // ⑩ カードクリックイベント
-    // =========================
-    container
-      .querySelectorAll(".record-card")
-      .forEach(card => {
-
-        card.addEventListener("click", (event) => {
-
-          event.stopPropagation();
-
-          const routeId =
-            card.dataset.routeId;
-
-          highlightRouteAndCard(routeId);
-        });
-      });
-
-    // =========================
-    // ⑪ クリックした軌跡を最初に強調
-    // =========================
     setTimeout(() => {
       highlightRouteAndCard(row.id);
     }, 50);
@@ -657,32 +456,29 @@ if (colorModeSelect) {
 
 loadPublicMapData();
 
-// ★ 追加：「表示設定」や「ルート情報」を個別に折りたためるようにする
+// ★ 追加：「表示設定」パネルのヘッダーにも ➖ ボタンを付けて最小化できるようにする
 document.addEventListener("DOMContentLoaded", () => {
   const detailsPanel = document.querySelector(".details-panel");
-  if (!detailsPanel) return;
-
-  const headers = detailsPanel.querySelectorAll("h2");
   
-  headers.forEach(h2 => {
-    h2.classList.add("collapsible-header");
-    const originalText = h2.innerText || h2.textContent;
-    h2.innerHTML = `<span>${originalText}</span><span class="toggle-icon">▼</span>`;
+  if (detailsPanel) {
+    const h2 = detailsPanel.querySelector("h2");
     
-    const contentDiv = document.createElement("div");
-    let nextNode = h2.nextSibling;
-    
-    while (nextNode && nextNode.tagName !== "H2") {
-      const toMove = nextNode;
-      nextNode = nextNode.nextSibling;
-      contentDiv.appendChild(toMove);
+    if (h2) {
+      // ヘッダーをフレックス表示にしてボタンを右端に配置
+      h2.style.display = "flex";
+      h2.style.justifyContent = "space-between";
+      h2.style.alignItems = "center";
+      
+      const minBtn = document.createElement("button");
+      minBtn.innerHTML = "➖";
+      minBtn.className = "panel-minimize-btn";
+      minBtn.title = "最小化 / 展開";
+      
+      minBtn.onclick = () => {
+        detailsPanel.classList.toggle("minimized");
+      };
+      
+      h2.appendChild(minBtn);
     }
-    
-    h2.parentNode.insertBefore(contentDiv, h2.nextSibling);
-
-    h2.addEventListener("click", () => {
-      contentDiv.classList.toggle("collapsed-content");
-      h2.querySelector(".toggle-icon").innerText = contentDiv.classList.contains("collapsed-content") ? "▶" : "▼";
-    });
-  });
+  }
 });

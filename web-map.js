@@ -1,25 +1,23 @@
 // ========================================
-// 1. スタイル（CSS）の確実な追加
+// 1. スタイル（CSS）の安全な追加
 // ========================================
 if (!document.getElementById("custom-map-styles")) {
   const style = document.createElement('style');
   style.id = "custom-map-styles";
   style.innerHTML = `
-    .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; box-sizing: border-box; }
+    .record-card { cursor: pointer; transition: all 0.2s ease; box-sizing: border-box; }
     .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    /* ★ 修正：影が削れてずれて見える問題を解消（内側の枠線だけにする） */
-    .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: none !important; }
-    .route-selected-glow { pointer-events: none; }
+    /* 枠線によるサイズ変化（レイアウトのズレ）を防ぐため、内側の影として青枠を描画 */
+    .record-card.highlighted { box-shadow: inset 0 0 0 2px #3b82f6 !important; background-color: #eff6ff !important; border: none !important; }
+    
     #route-cards-wrapper { max-height: 290px; overflow-y: auto; padding-right: 6px; }
     #route-cards-wrapper::-webkit-scrollbar { width: 6px; }
     #route-cards-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     #info-panel.minimized #route-info-container { display: none !important; }
     
-    /* ★ 修正：➖ボタンのダサい黒枠を強制的に消し飛ばす */
-    .panel-minimize-btn { background: transparent !important; border: none !important; font-size: 16px !important; cursor: pointer; color: #64748b; padding: 4px !important; display: flex; align-items: center; justify-content: center; }
-    .panel-minimize-btn:hover { color: #0f172a !important; }
-    .details-panel.minimized > div { display: none !important; }
-    .details-panel.minimized h2 { margin-bottom: 0 !important; border-bottom: none !important; padding-bottom: 0 !important; }
+    /* ★修正：左パネルのクラス名を正しいもの（bottom-left-panel）に変更 */
+    .bottom-left-panel.minimized > div { display: none !important; }
+    .bottom-left-panel.minimized h2 { margin-bottom: 0 !important; border-bottom: none !important; padding-bottom: 0 !important; }
   `;
   document.head.appendChild(style);
 }
@@ -31,20 +29,20 @@ window.allRawData = window.allRawData || [];
 window.currentHighlightedId = window.currentHighlightedId || null;
 window.routeLayers = window.routeLayers || {};
 
-if (!window.leafletMap) {
-  window.leafletMap = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
+if (!window.michiMap) {
+  window.michiMap = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
   const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO' });
   const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles © Esri' });
   
-  stdMap.addTo(window.leafletMap);
+  stdMap.addTo(window.michiMap);
   
   const baseMaps = { "🗺️ 標準マップ": stdMap, "🛰️ 航空写真": satelliteMap };
-  L.control.zoom({ position: 'bottomright' }).addTo(window.leafletMap);
-  L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(window.leafletMap);
+  L.control.zoom({ position: 'bottomright' }).addTo(window.michiMap);
+  L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(window.michiMap);
 }
 
-if (!window.routeLayer) window.routeLayer = L.layerGroup().addTo(window.leafletMap);
-if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(window.leafletMap);
+if (!window.routeLayer) window.routeLayer = L.layerGroup().addTo(window.michiMap);
+if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(window.michiMap);
 
 // ========================================
 // 3. 検索機能
@@ -62,7 +60,7 @@ if (!window.searchEventAdded) {
         const res = await fetch(url);
         const data = await res.json();
         if (data && data.length > 0) {
-          window.leafletMap.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+          window.michiMap.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
         } else {
           alert(`「${query}」が見つかりませんでした。`);
         }
@@ -200,17 +198,23 @@ window.highlightRouteAndCard = function(routeId) {
     newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  const targetRow = window.allRawData.find(r => r.id === routeId);
+  if (targetRow && targetRow.positions && targetRow.positions.length >= 2) {
+    const points = smoothLine(targetRow.positions);
+    L.polyline(points, {
+      color: '#3b82f6',
+      weight: 22,
+      opacity: 0.25,
+      lineCap: 'round',
+      lineJoin: 'round',
+      interactive: false 
+    }).addTo(window.glowLayer);
+  }
+
   if (window.routeLayers[routeId]) {
     window.routeLayers[routeId].forEach(layer => {
       layer.setStyle({ weight: 8, opacity: 1.0 }); 
       layer.bringToFront();
-      L.polyline(layer.getLatLngs(), {
-        color: '#3b82f6',
-        weight: 22,       
-        opacity: 0.25,    
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(window.glowLayer);
     });
   }
 };
@@ -275,7 +279,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const closeBtn = buttons.length > 0 ? buttons[0] : null;
       minBtn = document.createElement("button");
       minBtn.id = "minimize-panel-btn";
-      minBtn.className = "panel-minimize-btn"; // ★ クラスを適用して綺麗なボタンにする
+      minBtn.style.cssText = "background: transparent !important; border: none !important; font-size: 16px !important; cursor: pointer; color: #64748b; margin-right: 12px; padding: 4px;";
       minBtn.innerHTML = "➖";
       minBtn.title = "最小化 / 展開";
       minBtn.onclick = (event) => {
@@ -388,7 +392,7 @@ async function loadPublicMapData() {
     let allBounds = [];
     window.allRawData.forEach(row => { if (row.positions) row.positions.forEach(pt => allBounds.push(pt)); });
     
-    if (allBounds.length > 0) { window.leafletMap.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] }); } 
+    if (allBounds.length > 0) { window.michiMap.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] }); } 
   } catch (err) {
     console.error(err);
     if(statusMsg) statusMsg.textContent = "❌ 読み込み失敗";
@@ -402,38 +406,52 @@ if (colorModeSelect) colorModeSelect.addEventListener("change", renderPublicMap)
 loadPublicMapData();
 
 // ========================================
-// 9. ★修正：左パネル（表示設定）の確実なセットアップ
+// 9. 左パネル（表示設定）の完全無欠な折りたたみ機能
 // ========================================
 function setupLeftPanel() {
-  const detailsPanel = document.querySelector(".details-panel");
-  if (detailsPanel && !detailsPanel.dataset.setupDone) {
-    const h2 = detailsPanel.querySelector("h2");
-    if (h2 && !h2.querySelector(".panel-minimize-btn")) {
-      h2.style.display = "flex";
-      h2.style.justifyContent = "space-between";
-      h2.style.alignItems = "center";
+  // ★修正：クラス名を正しい bottom-left-panel に変更
+  let panel = document.querySelector(".bottom-left-panel"); 
+  if (!panel) {
+    const colorSelect = document.getElementById("color-mode-select");
+    if (colorSelect) panel = colorSelect.closest('.bottom-left-panel, div[style*="border"], div[style*="shadow"], .leaflet-control');
+  }
+
+  if (panel && !panel.dataset.setupDone) {
+    const titleEl = panel.firstElementChild;
+    
+    if (titleEl) {
+      titleEl.style.display = "flex";
+      titleEl.style.justifyContent = "space-between";
+      titleEl.style.alignItems = "center";
       
       const minBtn = document.createElement("button");
       minBtn.innerHTML = "➖";
-      minBtn.className = "panel-minimize-btn";
+      minBtn.style.cssText = "background: transparent !important; border: none !important; font-size: 16px !important; cursor: pointer; color: #64748b; margin-left: 10px; padding: 4px;";
       minBtn.title = "最小化 / 展開";
       
       minBtn.addEventListener("click", (event) => {
         event.stopPropagation();
-        detailsPanel.classList.toggle("minimized");
-        minBtn.innerHTML = detailsPanel.classList.contains("minimized") ? "＋" : "➖";
+        panel.classList.toggle("minimized");
+        const isMin = panel.classList.contains("minimized");
+        minBtn.innerHTML = isMin ? "＋" : "➖";
+        
+        Array.from(panel.children).forEach(child => {
+          if (child !== titleEl) {
+            child.style.display = isMin ? "none" : "";
+          }
+        });
       });
-      h2.appendChild(minBtn);
-      detailsPanel.dataset.setupDone = "true"; // 二重実行防止
+      
+      titleEl.appendChild(minBtn);
+      panel.dataset.setupDone = "true"; 
     }
   }
 }
 
-// 読み込みタイミングのズレを防ぐため、即時実行とイベント待ちの両方で仕掛ける
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", setupLeftPanel);
 } else {
   setupLeftPanel();
 }
-// 念のため少し後にも再確認（遅れて描画されるフレームワーク対策）
 setTimeout(setupLeftPanel, 500);
+setTimeout(setupLeftPanel, 1500);

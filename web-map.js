@@ -3,7 +3,9 @@ const style = document.createElement('style');
 style.innerHTML = `
   .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; }
   .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-  .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+ .route-selected-glow {
+  pointer-events: none;
+}
 
   /* ★ 追加：折りたたみ（アコーディオン）用スタイル */
   .collapsible-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: opacity 0.2s; }
@@ -289,86 +291,305 @@ function renderPublicMap() {
 
 function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
-    const infoPanel = document.getElementById("info-panel");
-    infoPanel.style.display = "flex";
-    infoPanel.classList.remove("minimized"); // 軌跡タッチ時は必ず開いた状態にする
 
-    // ★ 追加：ヘッダーに最小化ボタン(➖)を自動で挿入して、✖を隠す
-    if (!document.getElementById("minimize-panel-btn")) {
-      const closeBtn = infoPanel.querySelector("button"); 
+    // =========================
+    // ① 情報パネルを取得
+    // =========================
+    const infoPanel = document.getElementById("info-panel");
+
+    if (!infoPanel) {
+      console.error("❌ #info-panel が見つかりません");
+      return;
+    }
+
+    infoPanel.style.display = "flex";
+    infoPanel.classList.remove("minimized");
+
+    // =========================
+    // ② 最小化ボタンを作成
+    // =========================
+    let minBtn = document.getElementById("minimize-panel-btn");
+
+    if (!minBtn) {
+      // info-panel内のボタンを探す
+      const buttons = infoPanel.querySelectorAll("button");
+
+      // 最初のボタンを閉じるボタンとして扱う
+      const closeBtn = buttons.length > 0 ? buttons[0] : null;
+
+      minBtn = document.createElement("button");
+      minBtn.id = "minimize-panel-btn";
+      minBtn.innerHTML = "➖";
+      minBtn.title = "最小化 / 展開";
+
+      minBtn.onclick = (event) => {
+        event.stopPropagation();
+        infoPanel.classList.toggle("minimized");
+      };
+
       if (closeBtn && closeBtn.parentNode) {
-        const minBtn = document.createElement("button");
-        minBtn.id = "minimize-panel-btn";
-        minBtn.innerHTML = "➖";
-        minBtn.title = "最小化 / 展開";
-        minBtn.onclick = () => infoPanel.classList.toggle("minimized");
         closeBtn.parentNode.insertBefore(minBtn, closeBtn);
-        
-        // 元の✖ボタンを見えなくする
+
+        // 元の×ボタンは隠す
         closeBtn.style.display = "none";
+      } else {
+        // 閉じるボタンがない場合
+        infoPanel.insertBefore(minBtn, infoPanel.firstChild);
       }
     }
 
+    // =========================
+    // ③ クリック地点
+    // =========================
     const clickLat = e.latlng.lat;
     const clickLng = e.latlng.lng;
+
     let hitTracks = [];
 
+    // =========================
+    // ④ クリック地点付近の軌跡を探す
+    // =========================
     allRawData.forEach(searchRow => {
-      const searchCat = getCategory(searchRow.wheelchair, searchRow.assistance);
+
+      const searchCat = getCategory(
+        searchRow.wheelchair,
+        searchRow.assistance
+      );
+
       if (!visibleCats.includes(searchCat)) return;
-      if (!searchRow.positions || searchRow.positions.length === 0) return;
+
+      if (
+        !searchRow.positions ||
+        searchRow.positions.length === 0
+      ) {
+        return;
+      }
 
       let isHit = false;
-      for (let p of searchRow.positions) {
-        if (getDistanceMeters(clickLat, clickLng, p[0], p[1]) < 40) {
+
+      for (const p of searchRow.positions) {
+        const distance = getDistanceMeters(
+          clickLat,
+          clickLng,
+          p[0],
+          p[1]
+        );
+
+        if (distance < 40) {
           isHit = true;
           break;
         }
       }
-      if (isHit) hitTracks.push(searchRow);
+
+      if (isHit) {
+        hitTracks.push(searchRow);
+      }
     });
 
-    hitTracks.sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0));
+    // =========================
+    // ⑤ 新しい記録を上に
+    // =========================
+    hitTracks.sort(
+      (a, b) =>
+        new Date(b.datetime || 0) -
+        new Date(a.datetime || 0)
+    );
 
-    const container = document.querySelector("#route-info-container");
-    if (!container) return;
+    // =========================
+    // ⑥ 情報表示エリア
+    // =========================
+    const container =
+      document.querySelector("#route-info-container");
 
+    if (!container) {
+      console.error("❌ #route-info-container が見つかりません");
+      return;
+    }
+
+    // =========================
+    // ⑦ HTML作成
+    // =========================
     let html = `
-      <div class="collapsible-header" onclick="document.getElementById('route-cards-wrapper').classList.toggle('collapsed-content'); this.querySelector('.toggle-icon').innerText = document.getElementById('route-cards-wrapper').classList.contains('collapsed-content') ? '▶' : '▼';" style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold; background: #eff6ff; padding: 8px 12px; border-radius: 6px;">
-        <span>✅ この周辺の記録：${hitTracks.length}件</span>
+      <div
+        class="collapsible-header"
+        id="nearby-records-header"
+        style="
+          margin-bottom: 12px;
+          font-size: 13px;
+          color: #3b82f6;
+          font-weight: bold;
+          background: #eff6ff;
+          padding: 8px 12px;
+          border-radius: 6px;
+        "
+      >
+        <span>
+          ✅ この周辺の記録：${hitTracks.length}件
+        </span>
+
         <span class="toggle-icon">▼</span>
       </div>
+
       <div id="route-cards-wrapper">
     `;
-    
+
+    // =========================
+    // ⑧ カード作成
+    // =========================
     hitTracks.forEach((hitRow, index) => {
+
       const vibs = hitRow.vibrations || [0];
-      const maxVib = Math.max(...vibs).toFixed(1);
-      const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
-      const timeStr = formatTimeOfDay(hitRow.datetime);
+
+      const maxVib =
+        Math.max(...vibs).toFixed(1);
+
+      const avgVib =
+        (
+          vibs.reduce((a, b) => a + b, 0) /
+          vibs.length
+        ).toFixed(1);
+
+      const timeStr =
+        formatTimeOfDay(hitRow.datetime);
 
       html += `
-        <div id="record-card-${hitRow.id}" class="record-card" onclick="highlightRouteAndCard('${hitRow.id}')" style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-          <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <div
+          id="record-card-${hitRow.id}"
+          class="record-card"
+          data-route-id="${hitRow.id}"
+          style="
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+          "
+        >
+
+          <div
+            style="
+              font-size: 12px;
+              color: #64748b;
+              font-weight: bold;
+              margin-bottom: 8px;
+              border-bottom: 1px solid #e2e8f0;
+              padding-bottom: 6px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
             <span>${index + 1}件目の記録</span>
-            <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
+
+            <span
+              style="
+                background: #e2e8f0;
+                padding: 4px 8px;
+                border-radius: 12px;
+                color: #334155;
+              "
+            >
+              🦽 ${hitRow.wheelchair || "-"}
+            </span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#334155;">
-            <div><strong>🗓️ 日時：</strong> ${timeStr}</div>
-            <div><strong>📈 最大の揺れ：</strong> ${maxVib} （平均: ${avgVib}）</div>
-            <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
-            <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
-            <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
+
+          <div
+            style="
+              display:flex;
+              flex-direction:column;
+              gap:6px;
+              font-size:13px;
+              color:#334155;
+            "
+          >
+            <div>
+              <strong>🗓️ 日時：</strong>
+              ${timeStr}
+            </div>
+
+            <div>
+              <strong>📈 最大の揺れ：</strong>
+              ${maxVib}
+              （平均: ${avgVib}）
+            </div>
+
+            <div>
+              <strong>☀️ 天気：</strong>
+              ${hitRow.weather || "-"}
+            </div>
+
+            <div>
+              <strong>🤝 介助：</strong>
+              ${hitRow.assistance || "-"}
+            </div>
+
+            <div>
+              <strong>📝 メモ：</strong>
+              ${hitRow.memo || "-"}
+            </div>
           </div>
+
         </div>
       `;
     });
-    
-    html += `</div>`; 
+
+    html += `</div>`;
+
     container.innerHTML = html;
 
+    // =========================
+    // ⑨ 周辺記録の折りたたみ
+    // =========================
+    const recordsHeader =
+      document.getElementById("nearby-records-header");
+
+    const recordsWrapper =
+      document.getElementById("route-cards-wrapper");
+
+    if (recordsHeader && recordsWrapper) {
+
+      recordsHeader.addEventListener("click", () => {
+
+        recordsWrapper.classList.toggle(
+          "collapsed-content"
+        );
+
+        const icon =
+          recordsHeader.querySelector(".toggle-icon");
+
+        if (icon) {
+          icon.innerText =
+            recordsWrapper.classList.contains(
+              "collapsed-content"
+            )
+              ? "▶"
+              : "▼";
+        }
+      });
+    }
+
+    // =========================
+    // ⑩ カードクリックイベント
+    // =========================
+    container
+      .querySelectorAll(".record-card")
+      .forEach(card => {
+
+        card.addEventListener("click", (event) => {
+
+          event.stopPropagation();
+
+          const routeId =
+            card.dataset.routeId;
+
+          highlightRouteAndCard(routeId);
+        });
+      });
+
+    // =========================
+    // ⑪ クリックした軌跡を最初に強調
+    // =========================
     setTimeout(() => {
-      window.highlightRouteAndCard(row.id);
+      highlightRouteAndCard(row.id);
     }, 50);
   });
 }

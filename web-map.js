@@ -262,10 +262,19 @@ function renderPublicMap() {
     // ==========================================
     // ★ 写真のピンを立てる処理（新しい形式のみ！）
     // ==========================================
-    if (row.photos && row.photos.length > 0) {
+if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
-        // 新しい写真データ (image) が無いものは無視
-        if (!photo.image) return;
+        // ★ image か url のどちらかが入っていればOKにする！
+        let targetUrl = photo.image || photo.url || "";
+        if (!targetUrl) return;
+
+        // ★ もし古い「uc?」形式のURLだったら、最強の「lh3」形式に自動変換する！
+        if (targetUrl.includes("drive.google.com/uc")) {
+          targetUrl = targetUrl.replace(
+            "https://drive.google.com/uc?export=view&id=",
+            "https://lh3.googleusercontent.com/d/"
+          );
+        }
 
         const marker = L.marker([photo.lat, photo.lng]).addTo(window.routeLayer);
         
@@ -273,7 +282,24 @@ function renderPublicMap() {
         
         popupContent += `
           <img
-            src="${photo.image}"
+            src="${targetUrl}"
+            style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto 8px;"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+          >
+          <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
+        `;
+
+        if (photo.memo) {
+          popupContent += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-align: left;">📝 ${photo.memo}</div>`;
+        }
+        if (photo.date) {
+          popupContent += `<div style="font-size: 11px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
+        }
+        
+        popupContent += `</div>`;
+        marker.bindPopup(popupContent, { maxWidth: 300 });
+      });
+    }
             style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto 8px;"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
           >

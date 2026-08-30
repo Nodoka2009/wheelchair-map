@@ -300,7 +300,7 @@ function renderPublicMap() {
 }
 
 // ========================================
-// 7. クリックイベント処理
+// 7. クリックイベント処理（ルート詳細＋写真・メモ表示対応）
 // ========================================
 function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
@@ -368,6 +368,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const maxVib = Math.max(...vibs).toFixed(1);
       const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
       const timeStr = formatTimeOfDay(hitRow.datetime);
+      
       html += `
         <div id="record-card-${hitRow.id}" class="record-card" data-route-id="${hitRow.id}" style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
           <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
@@ -380,6 +381,35 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
             <div><strong>☀️ 天気：</strong> ${hitRow.weather || "-"}</div>
             <div><strong>🤝 介助：</strong> ${hitRow.assistance || "-"}</div>
             <div><strong>📝 メモ：</strong> ${hitRow.memo || "-"}</div>
+      `;
+
+      // ★ 右側パネルのカード内にも写真・メモ・撮影日を表示する処理を追加！
+      if (hitRow.photos && hitRow.photos.length > 0) {
+        html += `<div style="margin-top: 8px; border-top: 1px dashed #cbd5e1; padding-top: 8px;"><strong>📸 現地写真 (${hitRow.photos.length}枚):</strong>`;
+        hitRow.photos.forEach(photo => {
+          let cardPhotoUrl = photo.image || photo.url || "";
+          if (cardPhotoUrl.includes("drive.google.com/uc")) {
+            cardPhotoUrl = cardPhotoUrl.replace(
+              "https://drive.google.com/uc?export=view&id=",
+              "https://lh3.googleusercontent.com/d/"
+            );
+          }
+          html += `
+            <div style="margin-top: 6px; text-align: center; background: #ffffff; padding: 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <img src="${cardPhotoUrl}" style="max-width: 100%; max-height: 180px; border-radius: 4px; display: block; margin: 0 auto 4px;" onerror="this.style.display='none';">
+          `;
+          if (photo.memo) {
+            html += `<div style="font-size: 12px; color: #0f172a; text-align: left; font-weight: bold;">📝 ${photo.memo}</div>`;
+          }
+          if (photo.date) {
+            html += `<div style="font-size: 10px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
+          }
+          html += `</div>`;
+        });
+        html += `</div>`;
+      }
+
+      html += `
           </div>
         </div>
       `;

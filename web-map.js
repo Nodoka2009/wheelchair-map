@@ -1,27 +1,19 @@
-// ★ 追加：カードがクリックされた時などの強調（ハイライト）用CSSを自動適用
+// ★ 追加：強調（ハイライト）と、折りたたみ機能・スクロール用のCSSを自動適用
 const style = document.createElement('style');
 style.innerHTML = `
   .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; }
   .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
   .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
 
-  /* ★ 追加：2件目以降をスクロール可能にする設定 */
-  #route-info-container {
-    max-height: 320px; /* カード約2件分の高さ */
-    overflow-y: auto;
-    padding-right: 6px;
-  }
-  #route-info-container::-webkit-scrollbar { width: 6px; }
-  #route-info-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  /* ★ 追加：折りたたみ（アコーディオン）用スタイル */
+  .collapsible-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: opacity 0.2s; }
+  .collapsible-header:hover { opacity: 0.7; }
+  .collapsed-content { display: none !important; }
 
-  /* ★ 追加：最小化された時の設定 */
-  #info-panel.minimized #route-info-container {
-    display: none !important;
-  }
-  #minimize-panel-btn {
-    background: transparent; border: none; font-size: 14px; cursor: pointer; color: #64748b; margin-right: 12px;
-  }
-  #minimize-panel-btn:hover { color: #0f172a; }
+  /* ★ 追加：ルート詳細のスクロール設定（約2件分の高さ） */
+  #route-cards-wrapper { max-height: 290px; overflow-y: auto; padding-right: 6px; }
+  #route-cards-wrapper::-webkit-scrollbar { width: 6px; }
+  #route-cards-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 `;
 document.head.appendChild(style);
 
@@ -81,12 +73,11 @@ if (searchInput && searchBtn) {
 }
 
 const routeLayer = L.layerGroup().addTo(map);
-const glowLayer = L.layerGroup().addTo(map); // ★ 追加：光彩（グロー）専用のレイヤー
+const glowLayer = L.layerGroup().addTo(map);
 let allRawData = [];
 
-// ★ 追加：ハイライト状態を管理する変数
 let currentHighlightedId = null;
-const routeLayers = {}; // 各ルートの線（Polyline）を保存する箱
+const routeLayers = {}; 
 
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
@@ -206,12 +197,9 @@ function smoothLine(points) {
   return smoothed;
 }
 
-
-// ★ 追加：光彩（グロー）専用のレイヤー（重複エラーを防ぐため window に持たせる）
 if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(map);
 
 window.highlightRouteAndCard = function(routeId) {
-  // 1. 前に強調されていた線と光彩を元に戻す
   if (currentHighlightedId) {
     const prevCard = document.getElementById(`record-card-${currentHighlightedId}`);
     if (prevCard) prevCard.classList.remove('highlighted');
@@ -221,30 +209,24 @@ window.highlightRouteAndCard = function(routeId) {
     }
   }
 
-  // 古い光彩をすべて消去する
   window.glowLayer.clearLayers();
-
   currentHighlightedId = routeId;
 
-  // 2. クリックされたカードを強調する
   const newCard = document.getElementById(`record-card-${routeId}`);
   if (newCard) {
     newCard.classList.add('highlighted');
-    newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); // スクロールして見える位置に移動
+    newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  // 3. クリックされた軌跡に光彩（グロー）を付ける
   if (routeLayers[routeId]) {
     routeLayers[routeId].forEach(layer => {
-      // 本体は少しだけ太くして見やすく
       layer.setStyle({ weight: 8, opacity: 1.0 }); 
       layer.bringToFront();
 
-      // ★ お友達直伝！下側に太くて透明な線を敷いて光らせる
       L.polyline(layer.getLatLngs(), {
-        color: '#3b82f6', // 発光する色（青）
-        weight: 22,       // ぼんやり広がるように極太にする
-        opacity: 0.25,    // 透明度を下げて「光」っぽくする
+        color: '#3b82f6',
+        weight: 22,       
+        opacity: 0.25,    
         lineCap: 'round',
         lineJoin: 'round'
       }).addTo(window.glowLayer);
@@ -254,11 +236,7 @@ window.highlightRouteAndCard = function(routeId) {
 
 function renderPublicMap() {
   routeLayer.clearLayers();
-  
-  // ★ 追加：マップ再描画時に光彩もリセットする
   if (window.glowLayer) window.glowLayer.clearLayers();
-  
-  // ★ 追加：再描画時にルートごとの線の記憶をリセット
   for (let key in routeLayers) delete routeLayers[key];
 
   const colorModeSelect = document.getElementById("color-mode-select");
@@ -308,22 +286,6 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
     const infoPanel = document.getElementById("info-panel");
     infoPanel.style.display = "flex";
-    infoPanel.classList.remove("minimized"); // 軌跡タッチ時は必ず開いた状態にする
-
-    // ★ 追加：ヘッダーに最小化ボタン(➖)を自動で挿入
-    if (!document.getElementById("minimize-panel-btn")) {
-      const closeBtn = infoPanel.querySelector("button"); // ×ボタンを取得
-      if (closeBtn && closeBtn.parentNode) {
-        const minBtn = document.createElement("button");
-        minBtn.id = "minimize-panel-btn";
-        minBtn.innerHTML = "-";
-        minBtn.title = "最小化 / 展開";
-        // ボタンを押したら最小化と展開を切り替える
-        minBtn.onclick = () => infoPanel.classList.toggle("minimized");
-        // ×ボタンの左側に挿入
-        closeBtn.parentNode.insertBefore(minBtn, closeBtn);
-      }
-    }
 
     const clickLat = e.latlng.lat;
     const clickLng = e.latlng.lng;
@@ -349,7 +311,14 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
     const container = document.querySelector("#route-info-container");
     if (!container) return;
 
-    let html = `<div style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold;">✅ この周辺の記録：${hitTracks.length}件</div>`;
+    // ★ 修正：ヘッダーをクリック可能（折りたたみ可能）なデザインに変更し、リスト部分をスクロール枠で囲む
+    let html = `
+      <div class="collapsible-header" onclick="document.getElementById('route-cards-wrapper').classList.toggle('collapsed-content'); this.querySelector('.toggle-icon').innerText = document.getElementById('route-cards-wrapper').classList.contains('collapsed-content') ? '▶' : '▼';" style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold; background: #eff6ff; padding: 8px 12px; border-radius: 6px;">
+        <span>✅ この周辺の記録：${hitTracks.length}件</span>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div id="route-cards-wrapper">
+    `;
     
     hitTracks.forEach((hitRow, index) => {
       const vibs = hitRow.vibrations || [0];
@@ -373,6 +342,8 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
         </div>
       `;
     });
+    
+    html += `</div>`; // スクロール枠の閉じタグ
     container.innerHTML = html;
 
     setTimeout(() => {
@@ -395,7 +366,6 @@ async function loadPublicMapData() {
       return;
     }
 
-    // ★ 修正：データそれぞれに一意の「ID」を割り振る (indexを利用)
     allRawData = data.map((row, index) => {
       let positions = row.positions || [];
       let vibrations = [];
@@ -413,7 +383,7 @@ async function loadPublicMapData() {
 
       return {
         ...row,
-        id: "route_" + index, // ★ 追加：ルート判別用のID
+        id: "route_" + index, 
         positions: positions,
         vibrations: vibrations
       };
@@ -444,3 +414,28 @@ if (colorModeSelect) {
 }
 
 loadPublicMapData();
+
+// ★ 追加：ページ読み込み時に「表示設定」パネルも折りたためるように自動セットアップする
+document.addEventListener("DOMContentLoaded", () => {
+  const detailsPanel = document.querySelector(".details-panel");
+  if (detailsPanel) {
+    const h2 = detailsPanel.querySelector("h2");
+    if (h2) {
+      h2.classList.add("collapsible-header");
+      h2.innerHTML = `<span>${h2.innerHTML}</span><span class="toggle-icon">▼</span>`;
+      
+      // h2以下の要素をまとめて包むコンテナを作成
+      const content = document.createElement("div");
+      while (h2.nextSibling) {
+        content.appendChild(h2.nextSibling);
+      }
+      detailsPanel.appendChild(content);
+      
+      // クリックで開閉を切り替え
+      h2.addEventListener("click", () => {
+        content.classList.toggle("collapsed-content");
+        h2.querySelector(".toggle-icon").innerText = content.classList.contains("collapsed-content") ? "▶" : "▼";
+      });
+    }
+  }
+});

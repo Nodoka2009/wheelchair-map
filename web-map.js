@@ -30,19 +30,21 @@ window.allRawData = window.allRawData || [];
 window.currentHighlightedId = window.currentHighlightedId || null;
 window.routeLayers = window.routeLayers || {};
 
-// ★ 修正：window.map の衝突を避けるため window.leafletMap に変更
-if (!window.leafletMap) {
-  window.leafletMap = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
+// ★ HTMLの id="map" との衝突を避けるため window.michiMap を使用
+if (!window.michiMap) {
+  window.michiMap = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
   const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO' });
   const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles © Esri' });
-  stdMap.addTo(window.leafletMap);
+  
+  stdMap.addTo(window.michiMap);
+  
   const baseMaps = { "🗺️ 標準マップ": stdMap, "🛰️ 航空写真": satelliteMap };
-  L.control.zoom({ position: 'bottomright' }).addTo(window.leafletMap);
-  L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(window.leafletMap);
+  L.control.zoom({ position: 'bottomright' }).addTo(window.michiMap);
+  L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(window.michiMap);
 }
 
-if (!window.routeLayer) window.routeLayer = L.layerGroup().addTo(window.leafletMap);
-if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(window.leafletMap);
+if (!window.routeLayer) window.routeLayer = L.layerGroup().addTo(window.michiMap);
+if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(window.michiMap);
 
 // ========================================
 // 3. 検索機能
@@ -60,8 +62,7 @@ if (!window.searchEventAdded) {
         const res = await fetch(url);
         const data = await res.json();
         if (data && data.length > 0) {
-          // ★ 修正：leafletMap に変更
-          window.leafletMap.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
+          window.michiMap.flyTo([data[0].lat, data[0].lon], 16, { duration: 1.5 });
         } else {
           alert(`「${query}」が見つかりませんでした。`);
         }
@@ -386,8 +387,7 @@ async function loadPublicMapData() {
     let allBounds = [];
     window.allRawData.forEach(row => { if (row.positions) row.positions.forEach(pt => allBounds.push(pt)); });
     
-    // ★ 修正：leafletMapに変更
-    if (allBounds.length > 0) { window.leafletMap.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] }); } 
+    if (allBounds.length > 0) { window.michiMap.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] }); } 
   } catch (err) {
     console.error(err);
     if(statusMsg) statusMsg.textContent = "❌ 読み込み失敗";

@@ -4,6 +4,24 @@ style.innerHTML = `
   .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; }
   .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
   .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+
+  /* ★ 追加：2件目以降をスクロール可能にする設定 */
+  #route-info-container {
+    max-height: 320px; /* カード約2件分の高さ */
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  #route-info-container::-webkit-scrollbar { width: 6px; }
+  #route-info-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  /* ★ 追加：最小化された時の設定 */
+  #info-panel.minimized #route-info-container {
+    display: none !important;
+  }
+  #minimize-panel-btn {
+    background: transparent; border: none; font-size: 14px; cursor: pointer; color: #64748b; margin-right: 12px;
+  }
+  #minimize-panel-btn:hover { color: #0f172a; }
 `;
 document.head.appendChild(style);
 
@@ -288,7 +306,24 @@ function renderPublicMap() {
 
 function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
-    document.getElementById("info-panel").style.display = "flex";
+    const infoPanel = document.getElementById("info-panel");
+    infoPanel.style.display = "flex";
+    infoPanel.classList.remove("minimized"); // 軌跡タッチ時は必ず開いた状態にする
+
+    // ★ 追加：ヘッダーに最小化ボタン(➖)を自動で挿入
+    if (!document.getElementById("minimize-panel-btn")) {
+      const closeBtn = infoPanel.querySelector("button"); // ×ボタンを取得
+      if (closeBtn && closeBtn.parentNode) {
+        const minBtn = document.createElement("button");
+        minBtn.id = "minimize-panel-btn";
+        minBtn.innerHTML = "-";
+        minBtn.title = "最小化 / 展開";
+        // ボタンを押したら最小化と展開を切り替える
+        minBtn.onclick = () => infoPanel.classList.toggle("minimized");
+        // ×ボタンの左側に挿入
+        closeBtn.parentNode.insertBefore(minBtn, closeBtn);
+      }
+    }
 
     const clickLat = e.latlng.lat;
     const clickLng = e.latlng.lng;
@@ -322,7 +357,6 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
       const timeStr = formatTimeOfDay(hitRow.datetime);
 
-      // ★ 追加：id="record-card-〇〇", class="record-card", onclick="..." を設定し、クリック連動させる
       html += `
         <div id="record-card-${hitRow.id}" class="record-card" onclick="highlightRouteAndCard('${hitRow.id}')" style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
           <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
@@ -341,7 +375,6 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
     });
     container.innerHTML = html;
 
-    // ★ 追加：パネルが表示された直後に、自分がクリックした線を自動でハイライトする
     setTimeout(() => {
       window.highlightRouteAndCard(row.id);
     }, 50);

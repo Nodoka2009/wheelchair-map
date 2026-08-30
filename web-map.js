@@ -73,7 +73,7 @@ function getCategoryColor(category) {
     case "cat_manual_no_assist": return "#22c55e";
     case "cat_manual_assist": return "#eab308";
     case "cat_caregiver": return "#a855f7";
-    case "cat_other": return "#64748b"; // 灰色
+    case "cat_other": return "#64748b";
     default: return "#94a3b8";
   }
 }
@@ -159,6 +159,24 @@ function parseNmeaWithVib(rawText) {
   return { points, vibs };
 }
 
+// ★ 復活：GPSのギザギザを滑らかにする魔法の関数
+function smoothLine(points) {
+  if (!points || points.length < 3) return points;
+  let smoothed = [];
+  for (let i = 0; i < points.length; i++) {
+    let start = Math.max(0, i - 2);
+    let end = Math.min(points.length - 1, i + 2);
+    let sumLat = 0, sumLng = 0;
+    let count = end - start + 1;
+    for (let j = start; j <= end; j++) {
+      sumLat += points[j][0];
+      sumLng += points[j][1];
+    }
+    smoothed.push([sumLat / count, sumLng / count]);
+  }
+  return smoothed;
+}
+
 function renderPublicMap() {
   routeLayer.clearLayers();
 
@@ -172,9 +190,12 @@ function renderPublicMap() {
     const cat = getCategory(row.wheelchair, row.assistance);
     if (!visibleCats.includes(cat)) return;
 
-    const points = row.positions; 
+    const rawPoints = row.positions; 
     const vibrations = row.vibrations || [];
-    if (!points || points.length === 0) return;
+    if (!rawPoints || rawPoints.length < 2) return;
+
+    // ★ 描画する前に線を滑らかにする
+    const points = smoothLine(rawPoints);
 
     if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
@@ -273,7 +294,6 @@ async function loadPublicMapData() {
       let positions = row.positions || [];
       let vibrations = [];
 
-      // ★ 修正：row.rawText ではなく row.nmeaText（両対応にして安全に）
       const rawNmea = row.nmeaText || row.rawText;
       if (rawNmea) {
         const parsed = parseNmeaWithVib(rawNmea);

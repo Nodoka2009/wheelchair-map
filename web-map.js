@@ -242,7 +242,7 @@ function renderPublicMap() {
     const points = smoothLine(rawPoints);
     window.routeLayers[row.id] = []; 
 
-    // ★修正：return で処理が止まらないように if ~ else に変更しました
+    // 軌跡（線）の描画
     if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
       const polyline = L.polyline(points, { color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round" }).addTo(window.routeLayer);
@@ -260,11 +260,11 @@ function renderPublicMap() {
     }
 
     // ==========================================
-    // ★ 写真のピンを立てる処理（新しい形式専用！）
+    // ★ 写真のピンを立てる処理（新しい形式のみ！）
     // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
-        // 新しい画像形式 (image) がない場合は無視
+        // 新しい写真データ (image) が無いものは無視
         if (!photo.image) return;
 
         const marker = L.marker([photo.lat, photo.lng]).addTo(window.routeLayer);
@@ -280,9 +280,11 @@ function renderPublicMap() {
           <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
         `;
 
+        // メモがあれば表示
         if (photo.memo) {
           popupContent += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-align: left;">📝 ${photo.memo}</div>`;
         }
+        // 日付があれば表示
         if (photo.date) {
           popupContent += `<div style="font-size: 11px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
         }
@@ -400,6 +402,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
   const gasUrl = "https://script.google.com/macros/s/AKfycbwIuSdqZ5mR57buHEcBx-Mz9HPgG0OLEJAfVSP5ubV9Rk3g6LBVtFyTEXf-9wkU2InE-A/exec";
+  
   try {
     if(statusMsg) statusMsg.textContent = "⏳ データを読み込み中...";
     const response = await fetch(gasUrl);
@@ -408,6 +411,7 @@ async function loadPublicMapData() {
       if(statusMsg) statusMsg.textContent = "📭 データがありません";
       return;
     }
+    
     window.allRawData = data.map((row, index) => {
       let positions = row.positions || [];
       let vibrations = [];
@@ -419,8 +423,10 @@ async function loadPublicMapData() {
       if (vibrations.length === 0) vibrations = positions.map(() => 0.0);
       return { ...row, id: "route_" + index, positions: positions, vibrations: vibrations };
     });
+    
     if(statusMsg) statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     renderPublicMap();
+    
     let allBounds = [];
     window.allRawData.forEach(row => { if (row.positions) row.positions.forEach(pt => allBounds.push(pt)); });
     

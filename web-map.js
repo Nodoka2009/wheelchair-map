@@ -63,6 +63,7 @@ if (searchInput && searchBtn) {
 }
 
 const routeLayer = L.layerGroup().addTo(map);
+const glowLayer = L.layerGroup().addTo(map); // ★ 追加：光彩（グロー）専用のレイヤー
 let allRawData = [];
 
 // ★ 追加：ハイライト状態を管理する変数
@@ -187,9 +188,12 @@ function smoothLine(points) {
   return smoothed;
 }
 
-// ★ 追加：線とカードのハイライト（強調）を連動させる関数
+
+// ★ 追加：光彩（グロー）専用のレイヤー（重複エラーを防ぐため window に持たせる）
+if (!window.glowLayer) window.glowLayer = L.layerGroup().addTo(map);
+
 window.highlightRouteAndCard = function(routeId) {
-  // 前に強調されていたものを元に戻す
+  // 1. 前に強調されていた線と光彩を元に戻す
   if (currentHighlightedId) {
     const prevCard = document.getElementById(`record-card-${currentHighlightedId}`);
     if (prevCard) prevCard.classList.remove('highlighted');
@@ -199,26 +203,42 @@ window.highlightRouteAndCard = function(routeId) {
     }
   }
 
+  // 古い光彩をすべて消去する
+  window.glowLayer.clearLayers();
+
   currentHighlightedId = routeId;
 
-  // クリックされたカードを強調する
+  // 2. クリックされたカードを強調する
   const newCard = document.getElementById(`record-card-${routeId}`);
   if (newCard) {
     newCard.classList.add('highlighted');
     newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); // スクロールして見える位置に移動
   }
 
-  // クリックされた線を太くして最前面に出す
+  // 3. クリックされた軌跡に光彩（グロー）を付ける
   if (routeLayers[routeId]) {
     routeLayers[routeId].forEach(layer => {
-      layer.setStyle({ weight: 12, opacity: 1.0 }); // 線を太くする
+      // 本体は少しだけ太くして見やすく
+      layer.setStyle({ weight: 8, opacity: 1.0 }); 
       layer.bringToFront();
+
+      // ★ お友達直伝！下側に太くて透明な線を敷いて光らせる
+      L.polyline(layer.getLatLngs(), {
+        color: '#3b82f6', // 発光する色（青）
+        weight: 22,       // ぼんやり広がるように極太にする
+        opacity: 0.25,    // 透明度を下げて「光」っぽくする
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(window.glowLayer);
     });
   }
 };
 
 function renderPublicMap() {
   routeLayer.clearLayers();
+  
+  // ★ 追加：マップ再描画時に光彩もリセットする
+  if (window.glowLayer) window.glowLayer.clearLayers();
   
   // ★ 追加：再描画時にルートごとの線の記憶をリセット
   for (let key in routeLayers) delete routeLayers[key];
@@ -238,7 +258,7 @@ function renderPublicMap() {
     if (!rawPoints || rawPoints.length < 2) return;
 
     const points = smoothLine(rawPoints);
-    routeLayers[row.id] = []; // ★ 追加：このルートの線を格納する配列を準備
+    routeLayers[row.id] = []; 
 
     if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
@@ -246,7 +266,7 @@ function renderPublicMap() {
         color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
       
-      routeLayers[row.id].push(polyline); // ★ 追加：線を記録
+      routeLayers[row.id].push(polyline); 
       setupRouteClickEvent(polyline, points, row, visibleCats);
       return;
     }
@@ -260,7 +280,7 @@ function renderPublicMap() {
         color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
 
-      routeLayers[row.id].push(segPolyline); // ★ 追加：セグメントの線を記録
+      routeLayers[row.id].push(segPolyline); 
       setupRouteClickEvent(segPolyline, points, row, visibleCats);
     }
   });

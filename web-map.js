@@ -7,7 +7,6 @@ if (!document.getElementById("custom-map-styles")) {
   style.innerHTML = `
     .record-card { cursor: pointer; transition: all 0.2s ease; box-sizing: border-box; }
     .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    /* 枠線によるサイズ変化（レイアウトのズレ）を防ぐため、内側の影として青枠を描画 */
     .record-card.highlighted { box-shadow: inset 0 0 0 2px #3b82f6 !important; background-color: #eff6ff !important; border: none !important; }
     
     #route-cards-wrapper { max-height: 290px; overflow-y: auto; padding-right: 6px; }
@@ -260,15 +259,13 @@ function renderPublicMap() {
     }
 
     // ==========================================
-    // ★ 写真のピンを立てる処理（新しい形式のみ！）
+    // ★ 写真のピンを立てる処理（image または url 両対応！）
     // ==========================================
-if (row.photos && row.photos.length > 0) {
+    if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
-        // ★ image か url のどちらかが入っていればOKにする！
         let targetUrl = photo.image || photo.url || "";
         if (!targetUrl) return;
 
-        // ★ もし古い「uc?」形式のURLだったら、最強の「lh3」形式に自動変換する！
         if (targetUrl.includes("drive.google.com/uc")) {
           targetUrl = targetUrl.replace(
             "https://drive.google.com/uc?export=view&id=",
@@ -279,7 +276,6 @@ if (row.photos && row.photos.length > 0) {
         const marker = L.marker([photo.lat, photo.lng]).addTo(window.routeLayer);
         
         let popupContent = `<div style="text-align: center;">`;
-        
         popupContent += `
           <img
             src="${targetUrl}"
@@ -292,25 +288,6 @@ if (row.photos && row.photos.length > 0) {
         if (photo.memo) {
           popupContent += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-align: left;">📝 ${photo.memo}</div>`;
         }
-        if (photo.date) {
-          popupContent += `<div style="font-size: 11px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
-        }
-        
-        popupContent += `</div>`;
-        marker.bindPopup(popupContent, { maxWidth: 300 });
-      });
-    }
-            style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto 8px;"
-            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-          >
-          <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
-        `;
-
-        // メモがあれば表示
-        if (photo.memo) {
-          popupContent += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-align: left;">📝 ${photo.memo}</div>`;
-        }
-        // 日付があれば表示
         if (photo.date) {
           popupContent += `<div style="font-size: 11px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
         }

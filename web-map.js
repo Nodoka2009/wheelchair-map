@@ -15,7 +15,6 @@ if (!document.getElementById("custom-map-styles")) {
     #route-cards-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     #info-panel.minimized #route-info-container { display: none !important; }
     
-    /* ★修正：左パネルのクラス名を正しいもの（bottom-left-panel）に変更 */
     .bottom-left-panel.minimized > div { display: none !important; }
     .bottom-left-panel.minimized h2 { margin-bottom: 0 !important; border-bottom: none !important; padding-bottom: 0 !important; }
   `;
@@ -243,21 +242,54 @@ function renderPublicMap() {
     const points = smoothLine(rawPoints);
     window.routeLayers[row.id] = []; 
 
+    // ★修正：return で処理が止まらないように if ~ else に変更しました
     if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
       const polyline = L.polyline(points, { color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round" }).addTo(window.routeLayer);
       window.routeLayers[row.id].push(polyline); 
       setupRouteClickEvent(polyline, points, row, visibleCats);
-      return;
+    } else {
+      for (let i = 0; i < points.length - 1; i++) {
+        const segmentPoints = [points[i], points[i + 1]];
+        const vibVal = vibrations[i] || 0;
+        const segColor = getVibrationColor(vibVal);
+        const segPolyline = L.polyline(segmentPoints, { color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round" }).addTo(window.routeLayer);
+        window.routeLayers[row.id].push(segPolyline); 
+        setupRouteClickEvent(segPolyline, points, row, visibleCats);
+      }
     }
 
-    for (let i = 0; i < points.length - 1; i++) {
-      const segmentPoints = [points[i], points[i + 1]];
-      const vibVal = vibrations[i] || 0;
-      const segColor = getVibrationColor(vibVal);
-      const segPolyline = L.polyline(segmentPoints, { color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round" }).addTo(window.routeLayer);
-      window.routeLayers[row.id].push(segPolyline); 
-      setupRouteClickEvent(segPolyline, points, row, visibleCats);
+    // ==========================================
+    // ★ 写真のピンを立てる処理（新しい形式専用！）
+    // ==========================================
+    if (row.photos && row.photos.length > 0) {
+      row.photos.forEach(photo => {
+        // 新しい画像形式 (image) がない場合は無視
+        if (!photo.image) return;
+
+        const marker = L.marker([photo.lat, photo.lng]).addTo(window.routeLayer);
+        
+        let popupContent = `<div style="text-align: center;">`;
+        
+        popupContent += `
+          <img
+            src="${photo.image}"
+            style="max-width: 250px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto 8px;"
+            onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+          >
+          <div style="display:none; color:#666; padding:10px;">📷 写真を読み込めませんでした</div>
+        `;
+
+        if (photo.memo) {
+          popupContent += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; text-align: left;">📝 ${photo.memo}</div>`;
+        }
+        if (photo.date) {
+          popupContent += `<div style="font-size: 11px; color: #64748b; text-align: right;">📅 ${photo.date}</div>`;
+        }
+        
+        popupContent += `</div>`;
+        marker.bindPopup(popupContent, { maxWidth: 300 });
+      });
     }
   });
 }
@@ -409,7 +441,6 @@ loadPublicMapData();
 // 9. 左パネル（表示設定）の完全無欠な折りたたみ機能
 // ========================================
 function setupLeftPanel() {
-  // ★修正：クラス名を正しい bottom-left-panel に変更
   let panel = document.querySelector(".bottom-left-panel"); 
   if (!panel) {
     const colorSelect = document.getElementById("color-mode-select");

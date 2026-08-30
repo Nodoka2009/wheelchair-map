@@ -259,7 +259,7 @@ function renderPublicMap() {
     }
 
     // ==========================================
-    // ★ 写真のピンを立てる処理（image または url 両対応！）
+    // ★ 写真のピンを立てる処理（メモ・日付対応）
     // ==========================================
     if (row.photos && row.photos.length > 0) {
       row.photos.forEach(photo => {
@@ -400,7 +400,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
 }
 
 // ========================================
-// 8. データ取得と初期化（メモ・日付対応版）
+// 8. データ取得と初期化（メモ・日付完全対応版）
 // ========================================
 async function loadPublicMapData() {
   const statusMsg = document.querySelector("#status-msg");
@@ -425,7 +425,7 @@ async function loadPublicMapData() {
       }
       if (vibrations.length === 0) vibrations = positions.map(() => 0.0);
 
-      // ★ ここが超重要！写真に紐づくメモ（memo）と日付（date）を確実に保持する！
+      // 写真に紐づくメモ（memo）と日付（date）を確実に保持する
       let fixedPhotos = [];
       if (row.photos && Array.isArray(row.photos)) {
         fixedPhotos = row.photos.map(p => ({
@@ -445,19 +445,6 @@ async function loadPublicMapData() {
         photos: fixedPhotos 
       };
     });
-    
-    if(statusMsg) statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
-    renderPublicMap();
-    
-    let allBounds = [];
-    window.allRawData.forEach(row => { if (row.positions) row.positions.forEach(pt => allBounds.push(pt)); });
-    
-    if (allBounds.length > 0) { window.michiMap.fitBounds(L.latLngBounds(allBounds), { padding: [40, 40] }); } 
-  } catch (err) {
-    console.error(err);
-    if(statusMsg) statusMsg.textContent = "❌ 読み込み失敗";
-  }
-}
     
     if(statusMsg) statusMsg.textContent = `✅ ${data.length}件のデータをロードしました`;
     renderPublicMap();

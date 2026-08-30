@@ -1,3 +1,12 @@
+// ★ 追加：カードがクリックされた時などの強調（ハイライト）用CSSを自動適用
+const style = document.createElement('style');
+style.innerHTML = `
+  .record-card { border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; }
+  .record-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+  .record-card.highlighted { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+`;
+document.head.appendChild(style);
+
 const map = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
 
 const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
@@ -55,6 +64,10 @@ if (searchInput && searchBtn) {
 
 const routeLayer = L.layerGroup().addTo(map);
 let allRawData = [];
+
+// ★ 追加：ハイライト状態を管理する変数
+let currentHighlightedId = null;
+const routeLayers = {}; // 各ルートの線（Polyline）を保存する箱
 
 function getCategory(wheelchair, assistance) {
   if (!wheelchair) return "cat_unknown";
@@ -125,12 +138,10 @@ function parseNmeaWithVib(rawText) {
     if (!line.includes("VIB:")) return;
 
     const parts = line.split(",");
-
     if (parts.length < 7) return;
 
     const fixQuality = parseInt(parts[6], 10);
     if (isNaN(fixQuality) || fixQuality === 0) return;
-
     if (!parts[2] || !parts[3] || !parts[4] || !parts[5]) return;
 
     const latDeg = parseFloat(parts[2].substring(0, 2));
@@ -159,7 +170,6 @@ function parseNmeaWithVib(rawText) {
   return { points, vibs };
 }
 
-// ★ 復活：GPSのギザギザを滑らかにする魔法の関数
 function smoothLine(points) {
   if (!points || points.length < 3) return points;
   let smoothed = [];
@@ -177,8 +187,41 @@ function smoothLine(points) {
   return smoothed;
 }
 
+// ★ 追加：線とカードのハイライト（強調）を連動させる関数
+window.highlightRouteAndCard = function(routeId) {
+  // 前に強調されていたものを元に戻す
+  if (currentHighlightedId) {
+    const prevCard = document.getElementById(`record-card-${currentHighlightedId}`);
+    if (prevCard) prevCard.classList.remove('highlighted');
+    
+    if (routeLayers[currentHighlightedId]) {
+      routeLayers[currentHighlightedId].forEach(layer => layer.setStyle({ weight: 6, opacity: 0.8 }));
+    }
+  }
+
+  currentHighlightedId = routeId;
+
+  // クリックされたカードを強調する
+  const newCard = document.getElementById(`record-card-${routeId}`);
+  if (newCard) {
+    newCard.classList.add('highlighted');
+    newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); // スクロールして見える位置に移動
+  }
+
+  // クリックされた線を太くして最前面に出す
+  if (routeLayers[routeId]) {
+    routeLayers[routeId].forEach(layer => {
+      layer.setStyle({ weight: 12, opacity: 1.0 }); // 線を太くする
+      layer.bringToFront();
+    });
+  }
+};
+
 function renderPublicMap() {
   routeLayer.clearLayers();
+  
+  // ★ 追加：再描画時にルートごとの線の記憶をリセット
+  for (let key in routeLayers) delete routeLayers[key];
 
   const colorModeSelect = document.getElementById("color-mode-select");
   const colorMode = colorModeSelect ? colorModeSelect.value : "wheelchair";
@@ -194,14 +237,16 @@ function renderPublicMap() {
     const vibrations = row.vibrations || [];
     if (!rawPoints || rawPoints.length < 2) return;
 
-    // ★ 描画する前に線を滑らかにする
     const points = smoothLine(rawPoints);
+    routeLayers[row.id] = []; // ★ 追加：このルートの線を格納する配列を準備
 
     if (colorMode === "wheelchair" || vibrations.length < points.length) {
       const color = getCategoryColor(cat);
       const polyline = L.polyline(points, {
         color: color, weight: 6, opacity: 0.7, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
+      
+      routeLayers[row.id].push(polyline); // ★ 追加：線を記録
       setupRouteClickEvent(polyline, points, row, visibleCats);
       return;
     }
@@ -215,6 +260,7 @@ function renderPublicMap() {
         color: segColor, weight: 6, opacity: 0.8, lineCap: "round", lineJoin: "round"
       }).addTo(routeLayer);
 
+      routeLayers[row.id].push(segPolyline); // ★ 追加：セグメントの線を記録
       setupRouteClickEvent(segPolyline, points, row, visibleCats);
     }
   });
@@ -256,8 +302,9 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       const avgVib = (vibs.reduce((a, b) => a + b, 0) / vibs.length).toFixed(1);
       const timeStr = formatTimeOfDay(hitRow.datetime);
 
+      // ★ 追加：id="record-card-〇〇", class="record-card", onclick="..." を設定し、クリック連動させる
       html += `
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+        <div id="record-card-${hitRow.id}" class="record-card" onclick="highlightRouteAndCard('${hitRow.id}')" style="background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
           <div style="font-size: 12px; color: #64748b; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
             <span>${index + 1}件目の記録</span>
             <span style="background: #e2e8f0; padding: 4px 8px; border-radius: 12px; color: #334155;">🦽 ${hitRow.wheelchair || "-"}</span>
@@ -273,6 +320,11 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       `;
     });
     container.innerHTML = html;
+
+    // ★ 追加：パネルが表示された直後に、自分がクリックした線を自動でハイライトする
+    setTimeout(() => {
+      window.highlightRouteAndCard(row.id);
+    }, 50);
   });
 }
 
@@ -290,7 +342,8 @@ async function loadPublicMapData() {
       return;
     }
 
-    allRawData = data.map(row => {
+    // ★ 修正：データそれぞれに一意の「ID」を割り振る (indexを利用)
+    allRawData = data.map((row, index) => {
       let positions = row.positions || [];
       let vibrations = [];
 
@@ -307,6 +360,7 @@ async function loadPublicMapData() {
 
       return {
         ...row,
+        id: "route_" + index, // ★ 追加：ルート判別用のID
         positions: positions,
         vibrations: vibrations
       };

@@ -14,6 +14,11 @@ style.innerHTML = `
   #route-cards-wrapper { max-height: 290px; overflow-y: auto; padding-right: 6px; }
   #route-cards-wrapper::-webkit-scrollbar { width: 6px; }
   #route-cards-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+  /* ★ 追加：最小化された時の設定 */
+  #info-panel.minimized #route-info-container { display: none !important; }
+  #minimize-panel-btn { background: transparent; border: none; font-size: 14px; cursor: pointer; color: #64748b; margin-right: 12px; }
+  #minimize-panel-btn:hover { color: #0f172a; }
 `;
 document.head.appendChild(style);
 
@@ -286,6 +291,23 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
   polyline.on("click", (e) => {
     const infoPanel = document.getElementById("info-panel");
     infoPanel.style.display = "flex";
+    infoPanel.classList.remove("minimized"); // 軌跡タッチ時は必ず開いた状態にする
+
+    // ★ 追加：ヘッダーに最小化ボタン(➖)を自動で挿入して、✖を隠す
+    if (!document.getElementById("minimize-panel-btn")) {
+      const closeBtn = infoPanel.querySelector("button"); 
+      if (closeBtn && closeBtn.parentNode) {
+        const minBtn = document.createElement("button");
+        minBtn.id = "minimize-panel-btn";
+        minBtn.innerHTML = "➖";
+        minBtn.title = "最小化 / 展開";
+        minBtn.onclick = () => infoPanel.classList.toggle("minimized");
+        closeBtn.parentNode.insertBefore(minBtn, closeBtn);
+        
+        // 元の✖ボタンを見えなくする
+        closeBtn.style.display = "none";
+      }
+    }
 
     const clickLat = e.latlng.lat;
     const clickLng = e.latlng.lng;
@@ -311,7 +333,6 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
     const container = document.querySelector("#route-info-container");
     if (!container) return;
 
-    // ★ 修正：ヘッダーをクリック可能（折りたたみ可能）なデザインに変更し、リスト部分をスクロール枠で囲む
     let html = `
       <div class="collapsible-header" onclick="document.getElementById('route-cards-wrapper').classList.toggle('collapsed-content'); this.querySelector('.toggle-icon').innerText = document.getElementById('route-cards-wrapper').classList.contains('collapsed-content') ? '▶' : '▼';" style="margin-bottom: 12px; font-size: 13px; color: #3b82f6; font-weight: bold; background: #eff6ff; padding: 8px 12px; border-radius: 6px;">
         <span>✅ この周辺の記録：${hitTracks.length}件</span>
@@ -343,7 +364,7 @@ function setupRouteClickEvent(polyline, points, row, visibleCats) {
       `;
     });
     
-    html += `</div>`; // スクロール枠の閉じタグ
+    html += `</div>`; 
     container.innerHTML = html;
 
     setTimeout(() => {
@@ -415,27 +436,32 @@ if (colorModeSelect) {
 
 loadPublicMapData();
 
-// ★ 追加：ページ読み込み時に「表示設定」パネルも折りたためるように自動セットアップする
+// ★ 追加：「表示設定」や「ルート情報」を個別に折りたためるようにする
 document.addEventListener("DOMContentLoaded", () => {
   const detailsPanel = document.querySelector(".details-panel");
-  if (detailsPanel) {
-    const h2 = detailsPanel.querySelector("h2");
-    if (h2) {
-      h2.classList.add("collapsible-header");
-      h2.innerHTML = `<span>${h2.innerHTML}</span><span class="toggle-icon">▼</span>`;
-      
-      // h2以下の要素をまとめて包むコンテナを作成
-      const content = document.createElement("div");
-      while (h2.nextSibling) {
-        content.appendChild(h2.nextSibling);
-      }
-      detailsPanel.appendChild(content);
-      
-      // クリックで開閉を切り替え
-      h2.addEventListener("click", () => {
-        content.classList.toggle("collapsed-content");
-        h2.querySelector(".toggle-icon").innerText = content.classList.contains("collapsed-content") ? "▶" : "▼";
-      });
+  if (!detailsPanel) return;
+
+  const headers = detailsPanel.querySelectorAll("h2");
+  
+  headers.forEach(h2 => {
+    h2.classList.add("collapsible-header");
+    const originalText = h2.innerText || h2.textContent;
+    h2.innerHTML = `<span>${originalText}</span><span class="toggle-icon">▼</span>`;
+    
+    const contentDiv = document.createElement("div");
+    let nextNode = h2.nextSibling;
+    
+    while (nextNode && nextNode.tagName !== "H2") {
+      const toMove = nextNode;
+      nextNode = nextNode.nextSibling;
+      contentDiv.appendChild(toMove);
     }
-  }
+    
+    h2.parentNode.insertBefore(contentDiv, h2.nextSibling);
+
+    h2.addEventListener("click", () => {
+      contentDiv.classList.toggle("collapsed-content");
+      h2.querySelector(".toggle-icon").innerText = contentDiv.classList.contains("collapsed-content") ? "▶" : "▼";
+    });
+  });
 });

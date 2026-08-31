@@ -98,8 +98,8 @@ function getCategoryColor(category) {
 }
 
 function getVibrationColor(vibValue) {
-  if (vibValue >= 5.0) return "#ef4444"; 
-  if (vibValue >= 2.0) return "#f59e0b"; 
+  if (vibValue >= 9.0) return "#ef4444"; 
+  if (vibValue >= 5.0) return "#f59e0b"; 
   return "#22c55e";                      
 }
 

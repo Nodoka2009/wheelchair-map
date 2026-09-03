@@ -29,7 +29,7 @@ window.routeLayers = window.routeLayers || {};
 
 if (!window.michiMap) {
   window.michiMap = L.map("map", { zoomControl: false }).setView([34.6937, 135.5022], 13);
-const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO' });
+const stdMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_2uzz_1_a4dcd9ce0e7db6813a830880", { maxZoom: 20, attribution: '© OpenStreetMap contributors © CARTO' });
   const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles © Esri' });
   
   stdMap.addTo(window.michiMap);

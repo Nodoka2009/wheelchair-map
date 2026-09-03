@@ -85,7 +85,6 @@
 <!-- 左下：表示設定 -->
 <div class="ui-panel bottom-left-panel">
     <h2>⚙️ 表示設定</h2>
-    
     <div style="margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
         <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: bold;">🎨 色分けの基準</div>
         <select id="color-mode-select" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; outline: none; background: #f8fafc; cursor: pointer;">
@@ -93,15 +92,23 @@
             <option value="vibration">振動の激しさ（ガタガタ度）</option>
         </select>
     </div>
-
     <div class="filter-list">
         <label><input type="checkbox" class="filter-cb" value="cat_electric" checked> 🟦 電動車いす</label>
         <label><input type="checkbox" class="filter-cb" value="cat_manual_no_assist" checked> 🟩 自走式（介助なし）</label>
         <label><input type="checkbox" class="filter-cb" value="cat_manual_assist" checked> 🟨 自走式（介助あり）</label>
         <label><input type="checkbox" class="filter-cb" value="cat_caregiver" checked> 🟪 介助用</label>
-        <!-- ★ ここに「その他」を追加しました -->
         <label><input type="checkbox" class="filter-cb" value="cat_other" checked> ⬜ その他（ベビーカー等）</label>
     </div>
+</div>
+
+<!-- ★ここに追加：がたがた度凡例パネル（表示設定の隣に配置） -->
+<div class="ui-panel legend-panel" id="vibration-legend" style="display: none;">
+    <div style="font-weight: bold; color: #334155; margin-bottom: 8px;">📳 がたがた度の目安</div>
+    <ul style="margin: 0; padding-left: 0; list-style-type: none; color: #475569; line-height: 1.8; font-size: 12px;">
+        <li><span style="display:inline-block; width:12px; height:12px; background:#22c55e; border-radius:50%; margin-right:6px; vertical-align:-1px;"></span><b>0.0 〜 4.9</b>：スムーズな舗装路</li>
+        <li><span style="display:inline-block; width:12px; height:12px; background:#f59e0b; border-radius:50%; margin-right:6px; vertical-align:-1px;"></span><b>5.0 〜 8.9</b>：ガタガタ道・段差</li>
+        <li><span style="display:inline-block; width:12px; height:12px; background:#ef4444; border-radius:50%; margin-right:6px; vertical-align:-1px;"></span><b>9.0 以上</b>：強い衝撃・注意</li>
+    </ul>
 </div>
 
 <!-- 右側（スマホなら下）：ルート情報 -->

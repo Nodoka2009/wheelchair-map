@@ -38,6 +38,17 @@
         .close-btn:hover { background: #e2e8f0; }
         #route-info-container { overflow-y: auto; padding-right: 4px; }
 
+        /* がたがた度凡例パネル（表示設定の右隣） */
+        .legend-panel { bottom: 24px; left: 250px; padding: 12px 16px; width: 230px; }
+        
+        /* スマホ向け調整 */
+        @media (max-width: 600px) {
+            .bottom-left-panel { bottom: 24px; left: 16px; width: auto; }
+            /* スマホでは表示設定の上部に配置 */
+            .legend-panel { bottom: 180px; left: 16px; width: calc(100% - 32px); }
+            .info-panel { top: auto; bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; border-radius: 20px 20px 0 0; max-height: 60vh; }
+        }
+        
         /* モバイル対応 */
         @media (max-width: 600px) {
             .bottom-left-panel { bottom: 24px; left: 16px; width: auto; }

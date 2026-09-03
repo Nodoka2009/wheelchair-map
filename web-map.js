@@ -491,9 +491,11 @@ async function loadPublicMapData() {
 
 document.querySelectorAll(".filter-cb").forEach(cb => cb.addEventListener("change", renderPublicMap));
 const colorModeSelect = document.getElementById("color-mode-select");
-if (colorModeSelect) colorModeSelect.addEventListener("change", renderPublicMap);
 
-// がたがた度が選ばれた時だけ、隣の凡例パネルを表示する
+// ★修正：カッコの対応を正しく直した部分
+if (colorModeSelect) {
+  colorModeSelect.addEventListener("change", () => {
+    // がたがた度が選ばれた時だけ、隣の凡例パネルを表示する
     const vibLegend = document.getElementById("vibration-legend");
     if (vibLegend) {
       vibLegend.style.display = colorModeSelect.value === "vibration" ? "block" : "none";
